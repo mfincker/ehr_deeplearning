@@ -19,17 +19,6 @@ library(stringr)
 
 # Setup Data
 
-## Setup connection to stride7
-
-```{r}
-con <- dbConnect(
-    drv = RMySQL::MySQL(),
-    dbname = "stride7",
-    host = "shahlab-db1.stanford.edu",
-    username = "hershelm",
-    password = "EXMbP5M1gjqM")
-```
-
 ## Setup tables from stride7
 
 ```{r}
