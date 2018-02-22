@@ -1,0 +1,76 @@
+---
+title: "Positive / Negative visits - formatting"
+date: "2018-02-22"
+output:
+    github_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(readr)
+```
+
+# Positive visits
+
+```{r}
+positive_visits <- 
+  "positive_visits.tsv" %>% 
+  read_tsv(col_types = "dddi")
+
+positive_visits %>% head()
+```
+
+# Negative visits
+
+```{r}
+if (file.exists("negative_visits.tsv")) {
+  
+  negative_visits <- 
+    "negative_visits.tsv" %>% 
+    read_tsv(col_types = "dddi")
+  
+} else {
+  
+  # Consider all potential negative visits and remove the ones that
+  # are actually in the positive visits set
+  negative_visits <- 
+    "negative_visits_potential.txt" %>% 
+    read_tsv(col_types = "ddd") %>% 
+    anti_join(positive_visits, by = "visit_id") %>% 
+    mutate(label = 0)
+
+  negative_visits %>% 
+    write_tsv("negative_visits.tsv")
+}
+
+negative_visits %>% 
+  head()
+```
+
+# All visits - shuffled
+
+```{r}
+if (file.exists("all_visits.tsv")) {
+
+  all_visits <- 
+    "all_visits.tsv" %>% 
+    read_tsv(col_types = "dddi")
+  
+} else {
+  
+  # Concantenate positive / negative visits and shuffle
+  all_visits <- 
+    positive_visits %>% 
+    bind_rows(negative_visits) %>% 
+    sample_frac()
+  
+  all_visits %>% 
+    write_tsv("all_visits.tsv")
+  
+}
+
+all_visits %>% head()
+```
+
