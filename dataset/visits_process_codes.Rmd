@@ -23,9 +23,7 @@ library(RMySQL)
 con <- dbConnect(
     drv = RMySQL::MySQL(),
     dbname = "stride7",
-    host = "shahlab-db1.stanford.edu",
-    username = "hershelm",
-    password = "EXMbP5M1gjqM")
+    host = "shahlab-db1.stanford.edu")
 ```
 
 ```{r}
