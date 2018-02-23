@@ -16,6 +16,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
+from sys import argv
 
 from sklearn import preprocessing, linear_model, decomposition, datasets, metrics
 from sklearn.pipeline import Pipeline
@@ -25,7 +26,8 @@ from sklearn.model_selection import GridSearchCV
 ###################
 # Loading dataset #
 ###################
-data_path = "/Users/maeva/Documents/classes/cs230_deep_learning/project/data/code_counts_1000.csv"
+
+data_path = argv[1]
 
 df = pd.read_csv(data_path)
 
