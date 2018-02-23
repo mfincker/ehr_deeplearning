@@ -31,8 +31,6 @@ data_path = argv[1]
 
 df = pd.read_csv(data_path)
 
-# print df.head()
-
 ##########################
 # Split train / test set #
 ##########################
