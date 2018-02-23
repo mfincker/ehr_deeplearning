@@ -64,7 +64,6 @@ pipe = Pipeline(steps=[('pca', pca), ('logistic', logistic)])
 ####################
 
 scaler = preprocessing.StandardScaler().fit(train_x)
-# print "scaler mean shape: " + str(scaler.mean_.shape)
 
 train_x = scaler.transform(train_x)
 test_x = scaler.transform(test_x)
@@ -85,9 +84,11 @@ pca.fit = pca.fit(train_x)
 #######################
 # with L2 regularization
 
+# Hyperparameter grid
 n_components = [5, 20, 40, 64, 100, 300]
 Cs = np.logspace(-6, 3, 6)
 
+# Hyperparameter grid search with cross-validation
 estimator = GridSearchCV(pipe,
                          dict(pca__n_components=n_components,
                               logistic__C=Cs),
