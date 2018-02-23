@@ -17,7 +17,7 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
-from sklearn import preprocessing, linear_model, decomposition, datasets
+from sklearn import preprocessing, linear_model, decomposition, datasets, metrics
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
 
@@ -25,7 +25,7 @@ from sklearn.model_selection import GridSearchCV
 ###################
 # Loading dataset #
 ###################
-data_path = "/Users/maeva/Documents/classes/cs230_deep_learning/project/data/sample_codes.csv"
+data_path = "/Users/maeva/Documents/classes/cs230_deep_learning/project/data/code_counts_1000.csv"
 
 df = pd.read_csv(data_path)
 
@@ -51,7 +51,7 @@ n_obs, n_feature = test_x.shape
 # Setting up pipeline #
 #######################
 
-logistic = linear_model.LogisticRegression()
+logistic = linear_model.LogisticRegression(class_weight = 'balanced')
 
 pca = decomposition.PCA(n_components = n_feature, svd_solver = 'full')
 
@@ -77,15 +77,6 @@ test_x = scaler.transform(test_x)
 
 pca.fit = pca.fit(train_x)
 
-#Variance explained by components
-plt.figure(1, figsize=(4, 3))
-plt.axes([.2, .2, .7, .7])
-plt.plot(pca.explained_variance_, linewidth=2)
-plt.axis('tight')
-plt.xlabel('n components')
-plt.ylabel('explained variance')
-plt.savefig("PCA_variance_explained.png")
-
 
 #######################
 # Logistic regression #
@@ -93,22 +84,71 @@ plt.savefig("PCA_variance_explained.png")
 # with L2 regularization
 
 n_components = [5, 20, 40, 64, 100, 300]
-Cs = np.logspace(-4, 4, 3)
+Cs = np.logspace(-6, 3, 6)
 
 estimator = GridSearchCV(pipe,
                          dict(pca__n_components=n_components,
-                              logistic__C=Cs))
+                              logistic__C=Cs),
+                         scoring = "f1")
+
 estimator.fit(train_x, train_y)
 
 
-plt.figure(1, figsize=(4, 3))
+# Plot PCA
+label = 'n_components chosen: ' + str(estimator.best_estimator_.named_steps['pca'].n_components) + "\nL2 param: " + str(estimator.best_estimator_.named_steps['logistic'].C)
+plt.figure(1, figsize=(8, 6))
 plt.axes([.2, .2, .7, .7])
 plt.plot(pca.explained_variance_, linewidth=2)
 plt.axis('tight')
 plt.xlabel('n components')
 plt.ylabel('explained variance')
 plt.axvline(estimator.best_estimator_.named_steps['pca'].n_components,
-            linestyle=':', label='n_components chosen')
+            linestyle=':', label=label)
 plt.legend(prop=dict(size=12))
-plt.savefig("PCA_variance_explained_wwith_chosen_param.png")
+plt.savefig("logistic_reg_PCA_with_chosen_param.png")
+
+
+######################
+# Prediction on test #
+######################
+
+predict_y = estimator.best_estimator_.predict(test_x)
+accuracy_test = metrics.accuracy_score(test_y, predict_y)
+report_test = metrics.classification_report(test_y, predict_y)
+conf_matrix_test = metrics.confusion_matrix(test_y, predict_y)
+
+predict_train = estimator.best_estimator_.predict(train_x)
+accuracy_train = metrics.accuracy_score(train_y, predict_train)
+report_train = metrics.classification_report(train_y, predict_train)
+conf_matrix_train = metrics.confusion_matrix(train_y, predict_train)
+
+
+# Save model performance
+with open("report_logistic_regression.txt", 'w') as f:
+
+	f.write("estimator cv:\n")
+	f.write(str(estimator.cv_results_ ))
+
+	f.write('\n\n#########\n')
+	f.write('# Train #\n')
+	f.write('#########\n')
+	f.write("accuracy: " + str(accuracy_train) + "\n")
+
+	f.write("confusion matrix:\n")
+	f.write(str(conf_matrix_train) + "\n")
+
+	f.write("report:\n")
+	f.write(str(report_train))
+
+	f.write('\n\n########\n')
+	f.write('# Test #\n')
+	f.write('########\n')
+	f.write("accuracy: " + str(accuracy_test) + "\n")
+
+	f.write("confusion matrix:\n")
+	f.write(str(conf_matrix_test))
+
+	f.write("report:\n")
+	f.write(str(report_test))
+
 
