@@ -3,7 +3,7 @@
 # Baseline for EHR project:
 #	- split into train : test set (80:20)
 #	- PCA to scale down the number of feature
-#	- logistic regression
+#	- svm
 
 
 
@@ -85,9 +85,13 @@ pca.fit = pca.fit(train_x)
 #######
 # with L2 regularization
 
+# Hyperparameters grid
+# - PCA components to keep
 n_components = [5, 20, 40, 64, 100, 300]
+# - L2 reg parameter
 Cs = np.logspace(-6, 3, 6)
 
+# Hyperparameters grid search
 estimator = GridSearchCV(pipe,
                          dict(pca__n_components=n_components,
                               svm__C=Cs))
