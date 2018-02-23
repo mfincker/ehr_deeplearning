@@ -32,8 +32,6 @@ data_path = argv[1]
 
 df = pd.read_csv(data_path)
 
-# print df.head()
-
 ##########################
 # Split train / test set #
 ##########################
@@ -65,7 +63,6 @@ pipe = Pipeline(steps=[('pca', pca), ('mlp', mlp)])
 ####################
 
 scaler = preprocessing.StandardScaler().fit(train_x)
-# print "scaler mean shape: " + str(scaler.mean_.shape)
 
 train_x = scaler.transform(train_x)
 test_x = scaler.transform(test_x)
@@ -85,12 +82,15 @@ pca.fit = pca.fit(train_x)
 #######################
 # with L2 regularization
 
+# Hyperparameters
+# - PCA component to keep
 n_components = [5, 20, 40, 64, 100, 300]
+# - L2 reg parameter
 alpha_l2 = np.logspace(-6, 3, 6)
-hidden_layers = [[10, 10],
-				 [50, 5],
-				 [10, 10, 10]]
+# - Number of hidden layers / Number of neuron per hidden layers
+hidden_layers = [[10, 10],[50, 5],[10, 10, 10]]
 
+# Hyperparameter grid search with cross-validation
 estimator = GridSearchCV(pipe,
                          dict(pca__n_components = n_components,
                               mlp__alpha = alpha_l2,
@@ -105,7 +105,7 @@ pickle.dump(estimator, open("mlp_gridsearch_cv.sav", 'wb'))
 pickle.dump(estimator.best_estimator_, open("mlp_best_model.sav", "wb"))
 
 # Plot PCA
-label = 'n_components chosen: ' + str(estimator.best_estimator_.named_steps['pca'].n_components) + "\nL2 param: " + str(estimator.best_estimator_.named_steps['mlp'].alpha) +"\n # hidden layers: " + str(estimator.best_estimator_.named_steps['mlp'].alpha)
+label = 'n_components chosen: ' + str(estimator.best_estimator_.named_steps['pca'].n_components) + "\nL2 param: " + str(estimator.best_estimator_.named_steps['mlp'].alpha)
 plt.figure(1, figsize=(8, 6))
 plt.axes([.2, .2, .7, .7])
 plt.plot(pca.explained_variance_, linewidth=2)
