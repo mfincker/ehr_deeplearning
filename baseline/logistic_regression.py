@@ -46,7 +46,6 @@ train_y = df.iloc[int(frac_test * df.shape[0]):, 2].values
 
 n_obs, n_feature = test_x.shape
 
-
 ####################### 
 # Setting up pipeline #
 #######################
