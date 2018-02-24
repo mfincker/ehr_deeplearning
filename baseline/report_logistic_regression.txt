@@ -1,3 +1,37 @@
+#########
+# Train #
+#########
+accuracy: 0.9226869455006337
+confusion matrix:
+[[656  60]
+ [  1  72]]
+report:
+             precision    recall  f1-score   support
+
+          0       1.00      0.92      0.96       716
+          1       0.55      0.99      0.70        73
+
+avg / total       0.96      0.92      0.93       789
+
+
+########
+# Test #
+########
+accuracy: 0.8020304568527918
+confusion matrix:
+[[147  28]
+ [ 11  11]]
+ report:
+             precision    recall  f1-score   support
+
+          0       0.93      0.84      0.88       175
+          1       0.28      0.50      0.36        22
+
+avg / total       0.86      0.80      0.82       197
+
+####################
+# Cross validation #
+####################
 estimator cv:
 {'param_logistic__C': masked_array(data=[1e-06, 1e-06, 1e-06, 1e-06, 1e-06, 1e-06,
                    6.309573444801929e-05, 6.309573444801929e-05,
@@ -130,33 +164,3 @@ estimator cv:
        0.25899281, 0.26262626, 0.29411765, 0.35294118, 0.3       ,
        0.29411765, 0.25899281, 0.26530612, 0.27272727, 0.35820896,
        0.27659574])}
-
-#########
-# Train #
-#########
-accuracy: 0.9226869455006337
-confusion matrix:
-[[656  60]
- [  1  72]]
-report:
-             precision    recall  f1-score   support
-
-          0       1.00      0.92      0.96       716
-          1       0.55      0.99      0.70        73
-
-avg / total       0.96      0.92      0.93       789
-
-
-########
-# Test #
-########
-accuracy: 0.8020304568527918
-confusion matrix:
-[[147  28]
- [ 11  11]]report:
-             precision    recall  f1-score   support
-
-          0       0.93      0.84      0.88       175
-          1       0.28      0.50      0.36        22
-
-avg / total       0.86      0.80      0.82       197
