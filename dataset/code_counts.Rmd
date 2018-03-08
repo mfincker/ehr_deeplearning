@@ -1,0 +1,227 @@
+---
+title: "code_counts"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(tibble)
+library(purrr)
+
+library(DBI)
+library(RMySQL)
+```
+
+## Load stride7 tables
+
+```{r echo = FALSE}
+con <- dbConnect(
+    drv = RMySQL::MySQL(),
+    dbname = "stride7",
+    host = "shahlab-db1.stanford.edu",
+    username = "hershelm",
+    password = "EXMbP5M1gjqM")
+```
+
+```{r}
+dx_master <- tbl(con, "dx_master")
+```
+
+```{r}
+px_master <- tbl(con, "px_master")
+```
+
+```{r}
+rx_master <- tbl(con, "SHC_med_de")
+```
+
+
+## Load prediction data (patient_id, visit_id, age_at_pred, label)
+
+```{r}
+visits <- read_tsv("all_visits.tsv")
+```
+
+```{r}
+dx_master %>% head()
+```
+
+
+## Retrieve codes from stride7 (all)
+
+```{r}
+visits_pid <- visits %>% .$patient_id
+```
+
+```{r}
+dx_codes <- 
+  dx_master %>% 
+  filter(dx_hospital == "SHC") %>% 
+  select(patient_id, age_in_days = AGE_AT_CONTACT_IN_DAYS, code, code_source) %>% 
+  filter(patient_id %in% visits_pid) %>% 
+  collect()
+```
+
+```{r}
+px_codes <- 
+  px_master %>% 
+  filter(px_hospital == "SHC") %>% 
+  select(patient_id, age_in_days = age_at_contact_in_days, code, code_source) %>% 
+  filter(patient_id %in% visits_pid) %>% 
+  collect()
+```
+
+```{r}
+rx_codes <- 
+  rx_master %>% 
+  mutate(code_source = "RXNORM") %>% 
+  select(patient_id, age_in_days = age_at_order_in_days, code = med_id, code_source) %>% 
+  filter(patient_id %in% visits_pid) %>% 
+  collect()
+```
+
+```{r}
+rx_codes <- 
+  rx_codes %>% 
+  mutate(
+    code = as.character(code)
+  )
+```
+
+```{r}
+codes <- 
+  dx_codes %>% 
+  bind_rows(px_codes) %>% 
+  bind_rows(rx_codes)
+```
+
+```{r}
+visits_codes <- 
+  codes %>% 
+  inner_join(visits, by = "patient_id")
+```
+
+```{r}
+visits_codes %>% 
+  group_by(patient_id, visit_id) %>% 
+  filter(age_in_days < age_at_hosp_disch_in_days,
+         age_in_days >= age_at_hosp_disch_in_days - 365) %>% 
+  arrange(patient_id, visit_id, age_in_days) %>% 
+  write_csv("visits_codes_all.csv")
+```
+
+
+## Retrieve codes from stride7 (batched)
+
+```{r}
+query_db <- function(pid, age, visit_id, label) {
+  dx_codes <-
+    dx_master %>%
+    filter(
+      patient_id == pid,
+      AGE_AT_CONTACT_IN_DAYS < age,
+      AGE_AT_CONTACT_IN_DAYS >= age - 365,
+      #code_source == "ICD9CM",
+      dx_hospital == "SHC"
+    ) %>%
+    select(
+      patient_id, age_in_days = AGE_AT_CONTACT_IN_DAYS, code, code_source
+    ) %>%
+    collect()
+
+  px_codes <-
+    px_master %>%
+    filter(
+      patient_id == pid,
+      age_at_contact_in_days < age,
+      age_at_contact_in_days >= age - 365,
+      px_hospital == "SHC"
+    ) %>%
+    select(
+      patient_id, age_in_days = age_at_contact_in_days, code, code_source
+    ) %>%
+    collect()
+  # 
+  rx_codes <-
+    rx_master %>%
+    filter(
+      patient_id == pid,
+      age_at_order_in_days < age,
+      age_at_order_in_days >= age - 365
+    ) %>%
+    mutate(
+      code_source = "RXNORM"
+    ) %>%
+    select(
+      patient_id, age_in_days = age_at_order_in_days, code = med_id, code_source
+    ) %>%
+    collect() %>% 
+    mutate(code = as.character(code))
+  
+  codes <- 
+    dx_codes %>% 
+    bind_rows(px_codes) %>%
+    bind_rows(rx_codes) %>% 
+    mutate(visit_id = visit_id,
+           label = label)
+    
+  if (nrow(codes) == 0) {
+    return(NULL)
+  }
+  
+  return(codes)
+}
+```
+
+n = 1000
+
+```{r}
+visits_sample <- visits %>% slice(1:1000)
+
+pmap_df(list(visits_sample$patient_id, 
+             visits_sample$age_at_hosp_disch_in_days,
+             visits_sample$visit_id,
+             visits_sample$label),
+        query_db) %>% 
+  write_csv("visits_sample_1000.csv")
+```
+
+## Count / Spread Codes (n = 1000)
+
+```{r}
+visits_sample <- read_csv("visits_sample_1000.csv")
+```
+
+```{r}
+visits_sample %>% 
+  group_by(code) %>% 
+  filter(n() >= 15) %>% 
+  ungroup() %>% 
+  unite(col = "code", code_source, code) %>% 
+  group_by(patient_id, visit_id, label, code) %>% 
+  summarise(
+    n = n(),
+    age_pred = max(age_in_days)
+  ) %>%
+  group_by(patient_id, visit_id, label) %>% 
+  mutate(
+    age_pred = max(age_pred)
+  ) %>% 
+  spread(key = code, value = n, fill = 0) %>% 
+  write_csv("code_counts_1000.csv")
+```
+
+Debug function above...
+
+```{r}
+visits_sample %>% 
+  filter(patient_id == 133936) %>% 
+  filter(age_in_days == max(age_in_days))
+```
+
+
