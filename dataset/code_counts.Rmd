@@ -19,15 +19,6 @@ library(RMySQL)
 
 ## Load stride7 tables
 
-```{r echo = FALSE}
-con <- dbConnect(
-    drv = RMySQL::MySQL(),
-    dbname = "stride7",
-    host = "shahlab-db1.stanford.edu",
-    username = "hershelm",
-    password = "EXMbP5M1gjqM")
-```
-
 ```{r}
 dx_master <- tbl(con, "dx_master")
 ```
