@@ -2,6 +2,7 @@ import sys
 import argparse
 from collections import Counter
 import cPickle as pickle
+import re
 
 
 def csv_to_sequence_data(fStream, visit):
@@ -40,10 +41,10 @@ def csv_to_sequence_data(fStream, visit):
 		return sorted(seq, key=lambda x: -x[1])
 
 	codes = []
+	regex = re.compile(visit[0])
 
-	for i, line in enumerate(fStream):
-		if len(line) > 0:
-			# assert len(line.split(',')) == 7, "line " + str(i + 1) + " contains more than 7 columns."
+	for line in fStream:
+		if len(line) > 0 and regex.match(line) is not None:
 			patient_id, age_in_days, code, code_source, visit_id, age_at_discharge, label = line.strip('\n ').split(',')
 			cur_visit = (visit_id.strip(), patient_id.strip(), int(label.strip()))
 			if visit == cur_visit:
@@ -153,20 +154,30 @@ def preprocess_data(csvFile, visits, code2idx, outDataStream, outLabelStream, ti
 	print "Visits processed so far:"
 
 	for i, v in enumerate(visits):
-		if (i+1) % 100 == 0: print str(i + 1) 
-		with open(csvFile, "r") as f:
-			next(f)
-			_, _, codes, label = csv_to_sequence_data(f, v)
-			codes = filter_timeWindow(codes, timeWindow)
-			codes = [str(code2idx[c]) for c in codes]
+		# if (i+1) % 100 == 0: print str(i + 1) 
+		if i == 0:
+			with open(csvFile, "r") as f:
+				next(f)
+				print "in csv_to_seq"
+				_, _, codes, label = csv_to_sequence_data(f, v)
+				print codes
+				print "filtering window"
+				codes = filter_timeWindow(codes, timeWindow)
+				print codes
+				print "indexing codes"
+				codes = [str(code2idx[c]) for c in codes]
+				print codes
 
-			max_len = max(max_len, len(codes))
-			outDataStream.write(" ".join(codes) + "\n")
-			outLabelStream.write(str(label) + "\n")
+				max_len = max(max_len, len(codes))
+				outDataStream.write(" ".join(codes) + "\n")
+				outLabelStream.write(str(label) + "\n")
+	print "Max sequence lenght: " + str(max_len)
 
 def do_preprocess_data(args):
 	csv = args.csvFile
+	print "Loading visits"
 	visits = pickle.load(args.visitsStream)
+	print "Loading code2idx"
 	code2idx = pickle.load(args.code2idxStream)
 	out = args.outDataStream
 	label = args.outLabelStream
