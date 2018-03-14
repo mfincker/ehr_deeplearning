@@ -74,9 +74,9 @@ def build_code2idx(fStream, max_code = None, offset = 1):
 
 	cnt = Counter(codes)
 	if max_code:
-	    codes = cnt.most_common(max_code)
+		codes = cnt.most_common(max_code)
 	else:
-	    codes = cnt.most_common()
+		codes = cnt.most_common()
 
 	code2idx = {code: offset+i for i, (code, _) in enumerate(codes)}
 
