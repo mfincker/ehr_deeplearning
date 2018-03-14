@@ -4,29 +4,33 @@ from collections import Counter
 import cPickle as pickle
 
 
-def csv_to_sequence_data(fStream):
+def csv_to_sequence_data(fStream, visit):
 	'''
 	Turns Hershel's full_data.csv into a list of tuples, one tuple per visit_id,
 	where each tuple has the form: (visit_id, patient_id, [list of codes], label)
 	where [list of code idx] is a temporaly sorted list of tuples ((code, code_source), timeToVisitDischarge) 
 
+	Given Hershel's csv and a visit, go through the csv and returns a tuple corresponding to the visit codes.
+	Ex: Given the csv:
+		"5, 12, 34, PT, 3, 45, 1,
+		 9, 12, 46, CD, 23, 12, 0
+		 5, 15, 30, CT, 3, 45, 1"
+
+		 and the visit (3, 5, 1) (visit_id, patient_id, label)
+
+		 returns:
+		 (visit_id, patient_id, [list of codes: ((code, code_source), timeToDischarge)])
+		 (3,  5, [((34, PT), 33), ((30, CT), 30)], 1)
+
 
 	Args:
 		fStream: Hershel's csv as streamed in by open("file", "r")
-		seqPath: path to pickled data file
+		visit: visit to consider
 
 	Return:
-		seqs: list of visits as defined above
+		seqs: tuple of visit_id, patient_id, list of codes, label
 
-	Ex: a visit such as:
-		"5, 12, 34, PT, 3, 45, 1
-		 5, 15, 30, CT, 3, 45, 1
-		 9, 12, 46, CD, 23, 12, 0"
-
-		 is transformed into:
-		 [(3,  5, [((34, PT), 33), ((30, CT), 30)], 1),
-		  (23, 9, [((46, CD), 0)], 0)]
-
+	
 	Doesn't handle the header row
 	'''
 	def temporal_sort(seq):
@@ -35,22 +39,28 @@ def csv_to_sequence_data(fStream):
 		'''
 		return sorted(seq, key=lambda x: -x[1])
 
-	data = {}
+	codes = []
 
 	for i, line in enumerate(fStream):
 		if len(line) > 0:
-			assert len(line.split(',')) == 7, "line " + str(i + 1) + " contains more than 7 columns."
+			# assert len(line.split(',')) == 7, "line " + str(i + 1) + " contains more than 7 columns."
 			patient_id, age_in_days, code, code_source, visit_id, age_at_discharge, label = line.strip('\n ').split(',')
-			visit = (visit_id.strip(), patient_id.strip(), int(label.strip()))
+			cur_visit = (visit_id.strip(), patient_id.strip(), int(label.strip()))
+			if visit == cur_visit:
+				codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
 
-			if visit not in data.keys():
-				data[visit] = []
+	return (visit[0], visit[1], temporal_sort(codes), visit[2])
 
-			data[visit].append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
+def do_test_csv_to_sequence(args):
+	csv = """5, 12, 34, PT, 3, 45, 1
+9, 12, 46, CD, 23, 12, 0
+5, 10, 30, CT, 3, 45, 1""".split('\n')
 
-	seqs = [(visit[0], visit[1], temporal_sort(code_seq), visit[2]) for visit, code_seq in data.items()]
+	output = ("3",  "5", [(("30", "CT"), 35.), (("34", "PT"), 33.)], 1)
+	output_ = csv_to_sequence_data(csv, ("3", "5", 1))
 
-	return seqs
+	assert output == output_
+	print "test csv_to_sequence passed"
 
 def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, counter = False):
 	'''
@@ -125,6 +135,46 @@ def do_build_code2idx(args):
 		print "... done"
 
 
+def preprocess_data(csvFile, visits, code2idx, outDataStream, outLabelStream, timeWindow = 180):
+	'''
+	Given a code2idx dictionary and a list of visit, transform Hershel's csv into a file where:
+		- each line correspond to a visit
+		- each line is a sequence of indeces corresponding to the codes, ordered by descending time to timeToDischarge and withtin the timeWindow
+		- each index correspond to a code, as described in code2idx dictionary
+	'''
+	def filter_timeWindow(seq, timeWindow):
+		''' Returns a subset of the input code list where each code has happened in the given time window from the visit'''
+		return [s[0] for s in seq if s[1] <= timeWindow]
+
+	n_visit = len(visits)
+	max_len = 0
+
+	print "Total number of visits: " + str(n_visit)
+	print "Visits processed so far:"
+
+	for i, v in enumerate(visits):
+		if (i+1) % 100 == 0: print str(i + 1) 
+		with open(csvFile, "r") as f:
+			next(f)
+			_, _, codes, label = csv_to_sequence_data(f, v)
+			codes = filter_timeWindow(codes, timeWindow)
+			codes = [str(code2idx[c]) for c in codes]
+
+			max_len = max(max_len, len(codes))
+			outDataStream.write(" ".join(codes) + "\n")
+			outLabelStream.write(str(label) + "\n")
+
+def do_preprocess_data(args):
+	csv = args.csvFile
+	visits = pickle.load(args.visitsStream)
+	code2idx = pickle.load(args.code2idxStream)
+	out = args.outDataStream
+	label = args.outLabelStream
+	timeWindow = args.timeWindow
+
+	print "Preprocessing data from: " + csv + " wtih timeWindow: " + str(timeWindow)
+	preprocess_data(csv, visits, code2idx, out, label, timeWindow)
+
 
 # def preprocess_data(filePath, timeWindow = 180):
 # 	'''
@@ -188,15 +238,23 @@ if __name__ == "__main__":
 
 	command_parser = subparsers.add_parser('code2idx', help='Build the code2idx dictionary. Additionally, can return list of visits and counter used to build the dictionary.')
 	command_parser.add_argument('input_file', type=argparse.FileType('r'), help="input file path - required")
-	command_parser.add_argument('code2idx_file', type=argparse.FileType('wb'), help="File path to save pickled code2idx dictionary")
+	command_parser.add_argument('code2idx_file', type=argparse.FileType('wb'), help="File path to save pickled code2idx dictionary - required")
 	command_parser.add_argument('-c', '--counter_file', type=argparse.FileType('wb'), help="File path to save pickled counter")
 	command_parser.add_argument('-v', '--visits_file', type=argparse.FileType('wb'), help="File path to save visits list")
 	command_parser.add_argument('-m', '--max_code', type=int, default = None, help="Maximum number of codes to keep")
-	# command_parser.add_argument('-h', '--help',  help="""Usage: code2idx inputPath [-c counterPath] [-d code2idxPath] [-v visitsPath] [-h]
-
-		# Without optional arguments, save the cod2idx dictionary in the code2idxFile.
-		# With any of the positional argument, additionally returns visits / counter and save them in thei respective files.""")
 	command_parser.set_defaults(func=do_build_code2idx)
+
+	command_parser = subparsers.add_parser("csv_to_seq", help='Returns the code sequence for a given visit.')
+	command_parser.set_defaults(func=do_test_csv_to_sequence)
+
+	command_parser = subparsers.add_parser("preprocess", help="Turn the csv into list of list code indexes and list of labels.")
+	command_parser.add_argument('csvFile', type=str, help="Path to the csv containing the data")
+	command_parser.add_argument('visitsStream', type=argparse.FileType('rb'), help="Path to the visit list pickle")
+	command_parser.add_argument('code2idxStream', type=argparse.FileType('rb'), help="Path to the code2idx dictionary pickle")
+	command_parser.add_argument('outDataStream', type=argparse.FileType('w'), help="Path to the output file for the indexes")
+	command_parser.add_argument('outLabelStream', type=argparse.FileType('w'), help='Path to the output file for the labels')
+	command_parser.add_argument('-t', '--timeWindow', type=float, default = 180, help="Time window in days to include codes")
+	command_parser.set_defaults(func=do_preprocess_data)
 
 	ARGS = parser.parse_args()
 	if ARGS.func is None:
@@ -204,23 +262,6 @@ if __name__ == "__main__":
 		sys.exit(1)
 	else:
 		ARGS.func(ARGS)
-
-	# # Function Run on toy dataset
-	# if argv[1] == "csv_to_sequence":
-	# 	f = open("dataset/full_data_head.csv")
-	# 	next(f) # skip header row
-	# 	seqs = csv_to_sequence_data(f)
-	# 	f.close()
-
-	# 	for s in seqs:
-	# 		print s
-
-	# elif argv[1] == "preprocess":
-	# 	if len(argv) < 3:
-	# 		raise IOError, "You must specify a file to process"
-
-	# 	preprocess_data(argv[2], timeWindow = 180)
-
 
 
 
