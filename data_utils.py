@@ -1,4 +1,5 @@
-from sys import argv
+import sys
+import argparse
 from collections import Counter
 import cPickle as pickle
 
@@ -51,83 +52,131 @@ def csv_to_sequence_data(fStream):
 
 	return seqs
 
-def build_code2idx(fStream, max_code = None, offset = 1):
+def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, counter = False):
 	'''
 	Extract all codes from Hershel's csv and create a dicitonary
 	that links (code, code_source) -> index. Additionally, adds an extra code/index pair for "unknown"/0.
 
-
-
 	Args:
 		fStream: Hershel's csv as streamed in by open("file", "r")
 		max_code: number of codes to keep (keeping the most common)
+		returnVisits: bool - if True, also return a list of visits [(visit_id, patient_id, label)]
+		counter: bool - if True, also return the counter that was used to create the dictionary
 
 	Return:
-	code2idx: {(code, code_source) : index}
+		code2idx: {(code, code_source) : index}
+		counter: counter used to build code2idx
+		visits: list of all visits
 
 	Doesn't deal with header row
 	'''
 	codes = []
+	visits = set()
+	print "\treading inputFile"
 	for line in fStream:
-		_, _, code, code_source, _, _, _ = line.strip('\n ').split(',')
+		patient_id, _, code, code_source, visit_id, _, label = line.strip('\n ').split(',')
 		codes.append((code, code_source))
+		if returnVisits:
+			visits.add((visit_id.strip(), patient_id.strip(), int(label.strip())))
 
+	print "\tbuilding counter"
 	cnt = Counter(codes)
 	if max_code:
 		codes = cnt.most_common(max_code)
 	else:
 		codes = cnt.most_common()
 
+	print "\tbuilding dicitonary"
 	code2idx = {code: offset+i for i, (code, _) in enumerate(codes)}
+	code2idx[("-1", "UKN")] = 0
 
-	return code2idx
+	print "\tdone"
 
-def preprocess_data(filePath, timeWindow = 180):
-	'''
-	Turns Hershel's csv into two pickled list saved into files.
-	Arg:
-		filePath: path to csv file
-		timeWindow: keep only codes from within the time window to the visit date
-	Return:
-		nothing - saves data and labels as pickles object in files
-	'''
-	def filter_timeWindow(seq, timeWindow):
-		''' Returns a subset of the input code list where each code has happened in the given time window from the visit'''
-		return [s[0] for s in seq if s[1] <= timeWindow]
+	return code2idx, cnt, list(visits)
 
-	print "Building code index ..."
-	code2idx = {}
-	with open(filePath, 'r') as f:
-		next(f)
-		code2idx = build_code2idx(f)
-	print "... done!"
+def do_build_code2idx(args):
+	'''Build and save to file the code2idx (visits and or counter) to file'''
+	print args
 
-	print "Loading visits data ... "
-	data = []
-	with open(filePath, "r") as f:
-		next(f)
-		data = csv_to_sequence_data(f)
-	"... done!"
+	fStream = args.input_file
+	next(fStream) # skp header row
+	code2idxStream = args.code2idx_file
 
-	print "Extracting labels"
-	labels = [s[-1] for s in data]
+	counterStream = args.counter_file
+	saveCounter = counterStream is not None
 
-	print "Filtering codes based on time window of " + str(timeWindow) + " days"
-	data = [filter_timeWindow(s[2], timeWindow) for s in data]
-	print "Looking up code indexes"
-	data = [[code2idx[code] for code in codes] for codes in data]
+	visitsStream = args.visits_file
+	saveVisits = visitsStream is not None
 
-	print "Checking data:"
-	assert len(data) == len(labels), "Data and lables don't have the same size."
-	print "\tnumber of visits: " + str(len(data))
-	print "\tmax sequence length: " + str(max([len(d) for d in data]))
+	print "Building code2idx / counter / visit list"
+	code2idx, counter, visits = build_code2idx(fStream, max_code = args.max_code, offset = 1, returnVisits = saveVisits, counter = saveCounter)
 
-	print "Pickling data"
-	pickle.dump(data, open("full_data_" + str(timeWindow) + "days_window.pyc", "wb"))
-	print "Pickling labels"
-	pickle.dump(labels, open("full_labels_" + str(timeWindow) + "days_window.pyc", "wb"))
-	print "Pickling code2idx"
-	pickle.dump(code2idx, open("code2idx.pyc", "wb"))
+	print "Pickling code2idx ..."
+	print code2idx
+	pickle.dump(code2idx, code2idxStream)
+	print "... done"
+
+	if saveCounter:
+		print "Pickling counter ..."
+		print counter
+		pickle.dump(counter, counterStream)
+		print "... done"
+
+	if saveVisits:
+		print "Pickling visits ..."
+		print visits
+		pickle.dump(visits, visitsStream)
+		print "... done"
+
+
+
+# def preprocess_data(filePath, timeWindow = 180):
+# 	'''
+# 	Turns Hershel's csv into two pickled list saved into files.
+# 	Arg:
+# 		filePath: path to csv file
+# 		timeWindow: keep only codes from within the time window to the visit date
+# 	Return:
+# 		nothing - saves data and labels as pickles object in files
+# 	'''
+# 	def filter_timeWindow(seq, timeWindow):
+# 		''' Returns a subset of the input code list where each code has happened in the given time window from the visit'''
+# 		return [s[0] for s in seq if s[1] <= timeWindow]
+
+# 	print "Building code index ..."
+# 	code2idx = {}
+# 	with open(filePath, 'r') as f:
+# 		next(f)
+# 		code2idx = build_code2idx(f)
+# 	print "... done!"
+# 	print "Pickling code2idx"
+# 	pickle.dump(code2idx, open("code2idx.pyc", "wb"))
+
+# 	print "Loading visits data ... "
+# 	data = []
+# 	with open(filePath, "r") as f:
+# 		next(f)
+# 		data = csv_to_sequence_data(f)
+# 	"... done!"
+
+# 	print "Extracting labels"
+# 	labels = [s[-1] for s in data]
+
+# 	print "Filtering codes based on time window of " + str(timeWindow) + " days"
+# 	data = [filter_timeWindow(s[2], timeWindow) for s in data]
+# 	print "Looking up code indexes"
+# 	data = [[code2idx[code] for code in codes] for codes in data]
+
+# 	print "Checking data:"
+# 	assert len(data) == len(labels), "Data and lables don't have the same size."
+# 	print "\tnumber of visits: " + str(len(data))
+# 	print "\tmax sequence length: " + str(max([len(d) for d in data]))
+
+# 	print "Pickling data"
+# 	pickle.dump(data, open("full_data_" + str(timeWindow) + "days_window.pyc", "wb"))
+# 	print "Pickling labels"
+# 	pickle.dump(labels, open("full_labels_" + str(timeWindow) + "days_window.pyc", "wb"))
+
 
 	
 
@@ -138,30 +187,43 @@ def preprocess_data(filePath, timeWindow = 180):
 
 if __name__ == "__main__":
 
-	# Function Run on toy dataset
-	if argv[1] == "csv_to_sequence":
-		f = open("dataset/full_data_head.csv")
-		next(f) # skip header row
-		seqs = csv_to_sequence_data(f)
-		f.close()
+	parser = argparse.ArgumentParser(description='Preprocess Hershel\'s csv data')
+	subparsers = parser.add_subparsers()
 
-		for s in seqs:
-			print s
+	command_parser = subparsers.add_parser('code2idx', help='Build the code2idx dictionary. Additionally, can return list of visits and counter used to build the dictionary.')
+	command_parser.add_argument('input_file', type=argparse.FileType('r'), help="input file path - required")
+	command_parser.add_argument('code2idx_file', type=argparse.FileType('wb'), help="File path to save pickled code2idx dictionary")
+	command_parser.add_argument('-c', '--counter_file', type=argparse.FileType('wb'), help="File path to save pickled counter")
+	command_parser.add_argument('-v', '--visits_file', type=argparse.FileType('wb'), help="File path to save visits list")
+	command_parser.add_argument('-m', '--max_code', type=int, default = None, help="Maximum number of codes to keep")
+	# command_parser.add_argument('-h', '--help',  help="""Usage: code2idx inputPath [-c counterPath] [-d code2idxPath] [-v visitsPath] [-h]
 
-	elif argv[1] == "code2idx":
-		f = open("dataset/full_data_head.csv")
-		next(f) # skip header row
-		code2idx = build_code2idx(f)
-		f.close()
+		# Without optional arguments, save the cod2idx dictionary in the code2idxFile.
+		# With any of the positional argument, additionally returns visits / counter and save them in thei respective files.""")
+	command_parser.set_defaults(func=do_build_code2idx)
 
-		for code, index in code2idx.items():
-			print str(code) + ": " + str(index)
+	ARGS = parser.parse_args()
+	if ARGS.func is None:
+		parser.print_help()
+		sys.exit(1)
+	else:
+		ARGS.func(ARGS)
 
-	elif argv[1] == "preprocess":
-		if len(argv) < 3:
-			raise IOError, "You must specify a file to process"
+	# # Function Run on toy dataset
+	# if argv[1] == "csv_to_sequence":
+	# 	f = open("dataset/full_data_head.csv")
+	# 	next(f) # skip header row
+	# 	seqs = csv_to_sequence_data(f)
+	# 	f.close()
 
-		preprocess_data(argv[2], timeWindow = 180)
+	# 	for s in seqs:
+	# 		print s
+
+	# elif argv[1] == "preprocess":
+	# 	if len(argv) < 3:
+	# 		raise IOError, "You must specify a file to process"
+
+	# 	preprocess_data(argv[2], timeWindow = 180)
 
 
 
