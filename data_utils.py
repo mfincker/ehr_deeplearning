@@ -96,7 +96,6 @@ def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, c
 
 def do_build_code2idx(args):
 	'''Build and save to file the code2idx (visits and or counter) to file'''
-	print args
 
 	fStream = args.input_file
 	next(fStream) # skp header row
@@ -112,19 +111,16 @@ def do_build_code2idx(args):
 	code2idx, counter, visits = build_code2idx(fStream, max_code = args.max_code, offset = 1, returnVisits = saveVisits, counter = saveCounter)
 
 	print "Pickling code2idx ..."
-	print code2idx
 	pickle.dump(code2idx, code2idxStream)
 	print "... done"
 
 	if saveCounter:
 		print "Pickling counter ..."
-		print counter
 		pickle.dump(counter, counterStream)
 		print "... done"
 
 	if saveVisits:
 		print "Pickling visits ..."
-		print visits
 		pickle.dump(visits, visitsStream)
 		print "... done"
 
