@@ -126,6 +126,8 @@ def preprocess_data(filePath, timeWindow = 180):
 	pickle.dump(data, open("full_data_" + str(timeWindow) + "days_window.pyc", "wb"))
 	print "Pickling labels"
 	pickle.dump(labels, open("full_labels_" + str(timeWindow) + "days_window.pyc", "wb"))
+	print "Pickling code2idx"
+	pickle.dump(code2idx, open("code2idx.pyc", "wb"))
 
 	
 
