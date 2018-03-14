@@ -45,7 +45,7 @@ def csv_to_sequence_data(fStream):
 			if visit not in data.keys():
 				data[visit] = []
 
-			data[visit].append(((int(code.strip()), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
+			data[visit].append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
 
 	seqs = [(visit[0], visit[1], temporal_sort(code_seq), visit[2]) for visit, code_seq in data.items()]
 
@@ -70,7 +70,7 @@ def build_code2idx(fStream, max_code = None, offset = 1):
 	codes = []
 	for line in fStream:
 		_, _, code, code_source, _, _, _ = line.strip('\n ').split(',')
-		codes.append((int(code), code_source))
+		codes.append((code, code_source))
 
 	cnt = Counter(codes)
 	if max_code:
