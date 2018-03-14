@@ -40,7 +40,7 @@ def csv_to_sequence_data(fStream):
 		if len(line) > 0:
 			assert len(line.split(',')) == 7, "line " + str(i + 1) + " contains more than 7 columns."
 			patient_id, age_in_days, code, code_source, visit_id, age_at_discharge, label = line.strip('\n ').split(',')
-			visit = (int(visit_id.strip()), int(patient_id.strip()), int(label.strip()))
+			visit = (visit_id.strip(), patient_id.strip(), int(label.strip()))
 
 			if visit not in data.keys():
 				data[visit] = []
