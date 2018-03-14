@@ -2,6 +2,17 @@ import sys
 import argparse
 from collections import Counter
 import cPickle as pickle
+import logging
+
+consoleHandler = logging.StreamHandler(sys.stdout)
+fileHandler = logging.FileHandler("preprocess.log")
+
+logger = logging.getLogger()
+logger.addHandler(consoleHandler)
+logger.addHandler(fileHandler)
+
+logger.setLevel(logging.DEBUG)
+
 
 
 # def block_to_code_seq(block, visit):
@@ -60,7 +71,7 @@ import cPickle as pickle
 # 	output_ = csv_to_sequence_data(csv, ("3", "5", 1))
 
 # 	assert output == output_
-# 	print "test csv_to_sequence passed"
+# 	logger.info("test csv_to_sequence passed")
 
 def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, counter = False):
 	'''
@@ -82,25 +93,25 @@ def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, c
 	'''
 	codes = []
 	visits = set()
-	print "\treading inputFile"
+	logger.info("\treading inputFile")
 	for line in fStream:
 		patient_id, _, code, code_source, visit_id, _, label = line.strip('\n ').split(',')
 		codes.append((code, code_source))
 		if returnVisits:
 			visits.add((visit_id.strip(), patient_id.strip(), int(label.strip())))
 
-	print "\tbuilding counter"
+	logger.info("\tbuilding counter")
 	cnt = Counter(codes)
 	if max_code:
 		codes = cnt.most_common(max_code)
 	else:
 		codes = cnt.most_common()
 
-	print "\tbuilding dicitonary"
+	logger.info("\tbuilding dicitonary")
 	code2idx = {code: offset+i for i, (code, _) in enumerate(codes)}
 	code2idx[("-1", "UKN")] = 0
 
-	print "\tdone"
+	logger.info("\tdone")
 
 	return code2idx, cnt, list(visits)
 
@@ -117,22 +128,22 @@ def do_build_code2idx(args):
 	visitsStream = args.visits_file
 	saveVisits = visitsStream is not None
 
-	print "Building code2idx / counter / visit list"
+	logger.info("Building code2idx / counter / visit list")
 	code2idx, counter, visits = build_code2idx(fStream, max_code = args.max_code, offset = 1, returnVisits = saveVisits, counter = saveCounter)
 
-	print "Pickling code2idx ..."
+	logger.info("Pickling code2idx ...")
 	pickle.dump(code2idx, code2idxStream)
-	print "... done"
+	logger.info("... done")
 
 	if saveCounter:
-		print "Pickling counter ..."
+		logger.info("Pickling counter ...")
 		pickle.dump(counter, counterStream)
-		print "... done"
+		logger.info("... done")
 
 	if saveVisits:
-		print "Pickling visits ..."
+		logger.info("Pickling visits ...")
 		pickle.dump(visits, visitsStream)
-		print "... done"
+		logger.info("... done")
 
 
 def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, timeWindow = 180):
@@ -168,7 +179,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 	_, age_in_days, code, code_source, cur_visit, age_at_discharge, label = next(csvStream).strip('\n ').split(',')
 	codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
 
-	print "\tNumber of processed visits: " 
+	logger.info("\tNumber of processed visits: " )
 	for line in csvStream:
 		if len(line) > 0:
 			_, age_in_days, code, code_source, visit_id, age_at_discharge, label = line.strip('\n ').split(',')
@@ -178,7 +189,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 				cur_visit = visit_id
 
 				n_visit = n_visit + 1
-				if n_visit % 100 == 0: print "\t" + str(n_visit)
+				if n_visit % 100 == 0: logger.info("\t" + str(n_visit))
 
 				codes = temporal_sort(codes)
 
@@ -206,30 +217,30 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 	outDataStream.write(" ".join(codes) + "\n")
 	outLabelStream.write(str(label) + "\n")
 
-	print "done!"
-	print "Expected # visits: " + str(n_visit_)
-	print "# processed visits: " + str(n_visit)
-	print "Max length of code sequence: " + str(max_len)
+	logger.info("done!")
+	logger.info("Expected # visits: " + str(n_visit_))
+	logger.info("# processed visits: " + str(n_visit))
+	logger.info("Max length of code sequence: " + str(max_len))
 
 
 
 def do_preprocess_data(args):
 	csv = args.csvStream
-	print "Loading visits"
+	logger.info("Loading visits")
 	visits = pickle.load(args.visitsStream)
-	print "Loading code2idx"
+	logger.info("Loading code2idx")
 	code2idx = pickle.load(args.code2idxStream)
 	out = args.outDataStream
 	label = args.outLabelStream
 	timeWindow = args.timeWindow
 
-	print "Preprocessing data from: " + str(csv.name) + " wtih parameters:"
-	print "- timeWindow: " + str(timeWindow)
-	print "- code2idx: " + str(args.code2idxStream.name)
-	print "- visits: " + str(args.visitsStream.name)
-	print "- data output: " + str(args.outDataStream.name)
-	print "- label output: " + str(args.outLabelStream.name)
-	print ""
+	logger.info("Preprocessing data from: " + str(csv.name) + " wtih parameters:")
+	logger.info("- timeWindow: " + str(timeWindow))
+	logger.info("- code2idx: " + str(args.code2idxStream.name))
+	logger.info("- visits: " + str(args.visitsStream.name))
+	logger.info("- data output: " + str(args.outDataStream.name))
+	logger.info("- label output: " + str(args.outLabelStream.name))
+	logger.info("")
 	preprocess_data(csv, visits, code2idx, out, label, timeWindow)
 
 
@@ -246,38 +257,38 @@ def do_preprocess_data(args):
 # 		''' Returns a subset of the input code list where each code has happened in the given time window from the visit'''
 # 		return [s[0] for s in seq if s[1] <= timeWindow]
 
-# 	print "Building code index ..."
+# 	logger.info("Building code index ...")
 # 	code2idx = {}
 # 	with open(filePath, 'r') as f:
 # 		next(f)
 # 		code2idx = build_code2idx(f)
-# 	print "... done!"
-# 	print "Pickling code2idx"
+# 	logger.info("... done!")
+# 	logger.info("Pickling code2idx")
 # 	pickle.dump(code2idx, open("code2idx.pyc", "wb"))
 
-# 	print "Loading visits data ... "
+# 	logger.info("Loading visits data ... ")
 # 	data = []
 # 	with open(filePath, "r") as f:
 # 		next(f)
 # 		data = csv_to_sequence_data(f)
 # 	"... done!"
 
-# 	print "Extracting labels"
+# 	logger.info("Extracting labels")
 # 	labels = [s[-1] for s in data]
 
-# 	print "Filtering codes based on time window of " + str(timeWindow) + " days"
+# 	logger.info("Filtering codes based on time window of " + str(timeWindow) + " days")
 # 	data = [filter_timeWindow(s[2], timeWindow) for s in data]
-# 	print "Looking up code indexes"
+# 	logger.info("Looking up code indexes")
 # 	data = [[code2idx[code] for code in codes] for codes in data]
 
-# 	print "Checking data:"
+# 	logger.info("Checking data:")
 # 	assert len(data) == len(labels), "Data and lables don't have the same size."
-# 	print "\tnumber of visits: " + str(len(data))
-# 	print "\tmax sequence length: " + str(max([len(d) for d in data]))
+# 	logger.info("\tnumber of visits: " + str(len(data)))
+# 	logger.info("\tmax sequence length: " + str(max([len(d) for d in data])))
 
-# 	print "Pickling data"
+# 	logger.info("Pickling data")
 # 	pickle.dump(data, open("full_data_" + str(timeWindow) + "days_window.pyc", "wb"))
-# 	print "Pickling labels"
+# 	logger.info("Pickling labels")
 # 	pickle.dump(labels, open("full_labels_" + str(timeWindow) + "days_window.pyc", "wb"))
 
 
