@@ -140,14 +140,17 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 	n_visit_ = len(visits)
 	max_len = 0
 	n_visit = 0
+	all_codes = []
+	all_labels = []
 	codes = []
-	labels = []
+	label_ = -1
 
 	next(csvStream) # skip header row
 
 	# Initialize for first visit
 	_, age_in_days, code, code_source, cur_visit, age_at_discharge, label = next(csvStream).strip('\n ').split(',')
 	codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
+	label_ = label
 
 	logger.info("\tNumber of processed visits: " )
 	for line in csvStream:
@@ -166,14 +169,15 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 				codes = filter_timeWindow(codes, timeWindow)
 
 				codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
-
+				all_codes.append(codes)
+				all_labels.append(label_)
 				max_len = max(max_len, len(codes))
 
 				codes = []
-				labels = []
+				labels = -1
 
 			codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
-			labels.append(label)
+			label_ = label
 	# Process last visit
 	n_visit = n_visit + 1
 
@@ -182,12 +186,14 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 	codes = filter_timeWindow(codes, timeWindow)
 
 	codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
-
+	all_codes.append(codes)
+	all_labels.append(label_)
 	max_len = max(max_len, len(codes))
-	assert len(codes) == len(labels), "# labels != # code sequences"
+
+	assert len(all_codes) == len(all_labels), "# labels (" + str(len(all_labels)) + ") != # code sequences (" + str(len(all_codes)) + ")"
 	# Save as pickle
-	pickle.dump(codes, outDataStream)
-	pickle.dump(labels, outLabelStream)
+	pickle.dump(all_codes, outDataStream)
+	pickle.dump(all_labels, outLabelStream)
 
 	logger.info("done!")
 	logger.info("Expected # visits: " + str(n_visit_))
