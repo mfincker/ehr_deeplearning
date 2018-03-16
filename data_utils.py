@@ -87,6 +87,33 @@ def do_build_code2idx(args):
 		pickle.dump(visits, visitsStream)
 		logger.info("... done")
 
+def build_code2idx_from_counter(counter, max_code = None, offset = 1):
+	'''Build code2idx from a preloaded counter'''
+	if max_code:
+		codes = counter.most_common(max_code)
+	else:
+		codes = counter.most_common()
+
+	logger.info("\tbuilding dicitonary with " + str(max_code) + " codes.")
+	code2idx = {code: offset+i for i, (code, _) in enumerate(codes)}
+	code2idx[("-1", "UKN")] = 0
+
+	logger.info("\tdone")
+
+	return code2idx
+
+def do_build_code2idx_from_counter(args):
+	counter = pickle.load(args.counter_file)
+	max_code = args.max_code
+	code2idxStream = args.code2idx_file
+
+	"Build index dictionary from preloaded counter"
+	code2idx = build_code2idx_from_counter(counter, max_code, offset = 1)
+
+	logger.info("Pickling code2idx ...")
+	pickle.dump(code2idx, code2idxStream)
+	logger.info("... done")
+
 
 def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, timeWindow = 180):
 	'''
@@ -273,6 +300,12 @@ if __name__ == "__main__":
 	command_parser.add_argument('-v', '--visits_file', type=argparse.FileType('wb'), help="File path to save visits list")
 	command_parser.add_argument('-m', '--max_code', type=int, default = None, help="Maximum number of codes to keep")
 	command_parser.set_defaults(func=do_build_code2idx)
+
+	command_parser = subparsers.add_parser('code2idx_from_counter', help='Build the code2idx dictionary from a preloaded counter.')
+	command_parser.add_argument('counter_file', type=argparse.FileType('rb'), help="counter file path - required")
+	command_parser.add_argument('code2idx_file', type=argparse.FileType('wb'), help="File path to save pickled code2idx dictionary - required")
+	command_parser.add_argument('-m', '--max_code', type=int, default = None, help="Maximum number of codes to keep")
+	command_parser.set_defaults(func=do_build_code2idx_from_counter)	
 
 	# command_parser = subparsers.add_parser("csv_to_seq", help='Returns the code sequence for a given visit.')
 	# command_parser.set_defaults(func=do_test_csv_to_sequence)
