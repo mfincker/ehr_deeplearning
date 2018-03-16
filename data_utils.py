@@ -3,6 +3,7 @@ import argparse
 from collections import Counter
 import cPickle as pickle
 import logging
+from sklearn.model_selection import train_test_split
 
 consoleHandler = logging.StreamHandler(sys.stdout)
 fileHandler = logging.FileHandler("preprocess.log")
@@ -13,65 +14,6 @@ logger.addHandler(fileHandler)
 
 logger.setLevel(logging.DEBUG)
 
-
-
-# def block_to_code_seq(block, visit):
-# 	'''
-# 	Turns Hershel's full_data.csv into a list of tuples, one tuple per visit_id,
-# 	where each tuple has the form: (visit_id, patient_id, [list of codes], label)
-# 	where [list of code idx] is a temporaly sorted list of tuples ((code, code_source), timeToVisitDischarge) 
-
-# 	Given Hershel's csv and a visit, go through the csv and returns a tuple corresponding to the visit codes.
-# 	Ex: Given the csv:
-# 		"5, 12, 34, PT, 3, 45, 1,
-# 		 9, 12, 46, CD, 23, 12, 0
-# 		 5, 15, 30, CT, 3, 45, 1"
-
-# 		 and the visit (3, 5, 1) (visit_id, patient_id, label)
-
-# 		 returns:
-# 		 (visit_id, patient_id, [list of codes: ((code, code_source), timeToDischarge)])
-# 		 (3,  5, [((34, PT), 33), ((30, CT), 30)], 1)
-
-
-# 	Args:
-# 		fStream: Hershel's csv as streamed in by open("file", "r")
-# 		visit: visit to consider
-
-# 	Return:
-# 		seqs: tuple of visit_id, patient_id, list of codes, label
-
-	
-# 	Doesn't handle the header row
-# 	'''
-# 	def temporal_sort(seq):
-# 		'''
-# 		Sort a list of tuple based on the descending order of the second element in the tuple
-# 		'''
-# 		return sorted(seq, key=lambda x: -x[1])
-
-# 	codes = []
-# 	regex = re.compile(visit[0])
-
-# 	for line in fStream:
-# 		if len(line) > 0 and regex.match(line) is not None:
-# 			patient_id, age_in_days, code, code_source, visit_id, age_at_discharge, label = line.strip('\n ').split(',')
-# 			cur_visit = (visit_id.strip(), patient_id.strip(), int(label.strip()))
-# 			if visit == cur_visit:
-# 				codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
-
-# 	return (visit[0], visit[1], temporal_sort(codes), visit[2])
-
-# def do_test_csv_to_sequence(args):
-# 	csv = """5, 12, 34, PT, 3, 45, 1
-# 9, 12, 46, CD, 23, 12, 0
-# 5, 10, 30, CT, 3, 45, 1""".split('\n')
-
-# 	output = ("3",  "5", [(("30", "CT"), 35.), (("34", "PT"), 33.)], 1)
-# 	output_ = csv_to_sequence_data(csv, ("3", "5", 1))
-
-# 	assert output == output_
-# 	logger.info("test csv_to_sequence passed")
 
 def build_code2idx(fStream, max_code = None, offset = 1, returnVisits = False, counter = False):
 	'''
@@ -244,57 +186,77 @@ def do_preprocess_data(args):
 	preprocess_data(csv, visits, code2idx, out, label, timeWindow)
 
 
-# def preprocess_data(filePath, timeWindow = 180):
-# 	'''
-# 	Turns Hershel's csv into two pickled list saved into files.
-# 	Arg:
-# 		filePath: path to csv file
-# 		timeWindow: keep only codes from within the time window to the visit date
-# 	Return:
-# 		nothing - saves data and labels as pickles object in files
-# 	'''
-# 	def filter_timeWindow(seq, timeWindow):
-# 		''' Returns a subset of the input code list where each code has happened in the given time window from the visit'''
-# 		return [s[0] for s in seq if s[1] <= timeWindow]
+def split_train_dev_test(full_data, full_label, train, dev, test):
+	''' Split the full_data (list of list) and full_label 
+	(of same length as full_data) into train / dev / test sets
+	of corresponding to train / dev / test percentage of the full_data.
 
-# 	logger.info("Building code index ...")
-# 	code2idx = {}
-# 	with open(filePath, 'r') as f:
-# 		next(f)
-# 		code2idx = build_code2idx(f)
-# 	logger.info("... done!")
-# 	logger.info("Pickling code2idx")
-# 	pickle.dump(code2idx, open("code2idx.pyc", "wb"))
+	Args:
+		- full_data: list of list of codes, one item per code sequence
+		- full_label: list of labels (same lenght as full_data)
+		- train / dev / set: proportion split of the full_data into train / dev / test
 
-# 	logger.info("Loading visits data ... ")
-# 	data = []
-# 	with open(filePath, "r") as f:
-# 		next(f)
-# 		data = csv_to_sequence_data(f)
-# 	"... done!"
+	Return:
+		train_x, train_y, dev_x, dev_y, test_x, test_y
+	'''
+	assert abs(train + dev + test  - 1) <= 0.001, "Train / dev / test proportions don't sum to 1."
+	eval_prop = test + dev
+	train_x, eval_x, train_y, eval_y = train_test_split(full_data, full_label, test_size = eval_prop)
+	dev_x, test_x, dev_y, test_y = train_test_split(eval_x, eval_y, test_size = test / eval_prop)
 
-# 	logger.info("Extracting labels")
-# 	labels = [s[-1] for s in data]
-
-# 	logger.info("Filtering codes based on time window of " + str(timeWindow) + " days")
-# 	data = [filter_timeWindow(s[2], timeWindow) for s in data]
-# 	logger.info("Looking up code indexes")
-# 	data = [[code2idx[code] for code in codes] for codes in data]
-
-# 	logger.info("Checking data:")
-# 	assert len(data) == len(labels), "Data and lables don't have the same size."
-# 	logger.info("\tnumber of visits: " + str(len(data)))
-# 	logger.info("\tmax sequence length: " + str(max([len(d) for d in data])))
-
-# 	logger.info("Pickling data")
-# 	pickle.dump(data, open("full_data_" + str(timeWindow) + "days_window.pyc", "wb"))
-# 	logger.info("Pickling labels")
-# 	pickle.dump(labels, open("full_labels_" + str(timeWindow) + "days_window.pyc", "wb"))
+	return train_x, train_y, dev_x, dev_y, test_x, test_y
 
 
-	
+def do_split_train_dev_test(args):
+	'''Read in the full_data, split it into train/dev/test sets and 
+	save them as pickles.
+	'''
+	full_data = []
+	full_labels = []
 
+	print "Loading data"
+	for line in args.dataFile:
+		if len(line.strip('\n')) > 0:
+			seq = line.strip('\n').split(' ')
+			seq = [int(c) for c in seq]
+			full_data.append(seq)
 
+	print "Loading labels"
+	for line in args.labelFile:
+		if len(line.strip('\n')) > 0:
+			label = line.strip('\n')
+			label = int(label)
+			full_labels.append(label)
+
+	train = args.train
+	dev = args.dev
+	test = args.test
+
+	print "Splitting"
+	train_x, train_y, dev_x, dev_y, test_x, test_y = split_train_dev_test(full_data, full_labels, train, dev, test)
+
+	assert len(train_y) + len(test_y) + len(dev_y) == len(full_labels), "Split issue: sum of train/test/dev length doesn't match length of full data."
+
+	root = args.dataFile.name.split('.')[:-1]
+	root = "".join(root)
+
+	print "Pickling train"
+	with open(root + ".train_x.pyc", 'wb') as f:
+		pickle.dump(train_x, f)
+	with open(root + ".train_y.pyc", 'wb') as f:
+		pickle.dump(train_y, f)
+
+	print "Pickling dev"
+	with open(root + ".dev_x.pyc", 'wb') as f:
+		pickle.dump(dev_x, f)
+	with open(root + ".dev_y.pyc", 'wb') as f:
+		pickle.dump(dev_y, f)
+
+	print "Pickling test"
+	with open(root + ".test_x.pyc", 'wb') as f:
+		pickle.dump(test_x, f)
+	with open(root + ".test_y.pyc", 'wb') as f:
+		pickle.dump(test_y, f)
 
 
 
@@ -323,6 +285,14 @@ if __name__ == "__main__":
 	command_parser.add_argument('outLabelStream', type=argparse.FileType('w'), help='Path to the output file for the labels')
 	command_parser.add_argument('-t', '--timeWindow', type=float, default = 180, help="Time window in days to include codes")
 	command_parser.set_defaults(func=do_preprocess_data)
+
+	command_parser = subparsers.add_parser("split", help="Split the formatted indexed data into split / train / test sets and pickle them.")
+	command_parser.add_argument('dataFile', type=argparse.FileType('r'), help="Path to the data file")
+	command_parser.add_argument('labelFile', type=argparse.FileType('r'), help="Path to the label file")
+	command_parser.add_argument('-t', '--train', type = float, default = 0.8, help="Proportion of data in train set - default 0.8")
+	command_parser.add_argument('-d', '--dev', type = float, default = 0.1, help="Proportion of data in dev set - default 0.1")
+	command_parser.add_argument('-s', '--test', type = float, default = 0.1, help="Proportion of data in test set - default 0.1")
+	command_parser.set_defaults(func=do_split_train_dev_test)
 
 	ARGS = parser.parse_args()
 	if ARGS.func is None:
