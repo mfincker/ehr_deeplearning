@@ -141,6 +141,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 	max_len = 0
 	n_visit = 0
 	codes = []
+	labels = []
 
 	next(csvStream) # skip header row
 
@@ -158,21 +159,21 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 				cur_visit = visit_id
 
 				n_visit = n_visit + 1
-				if n_visit % 100 == 0: logger.info("\t" + str(n_visit))
+				if n_visit % 1000 == 0: logger.info("\t" + str(n_visit))
 
 				codes = temporal_sort(codes)
 
 				codes = filter_timeWindow(codes, timeWindow)
 
-				codes = [str(code2idx.get(c, code2idx[("-1", "UKN")])) for c in codes]
+				codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
 
 				max_len = max(max_len, len(codes))
-				outDataStream.write(" ".join(codes) + "\n")
-				outLabelStream.write(str(label) + "\n")
 
 				codes = []
+				labels = []
 
 			codes.append(((code.strip(), code_source.strip()), float(age_at_discharge.strip()) - float(age_in_days.strip())))
+			labels.append(label)
 	# Process last visit
 	n_visit = n_visit + 1
 
@@ -180,11 +181,13 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 
 	codes = filter_timeWindow(codes, timeWindow)
 
-	codes = [str(code2idx.get(c, code2idx[("-1", "UKN")])) for c in codes]
+	codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
 
 	max_len = max(max_len, len(codes))
-	outDataStream.write(" ".join(codes) + "\n")
-	outLabelStream.write(str(label) + "\n")
+	assert len(codes) == len(labels), "# labels != # code sequences"
+	# Save as pickle
+	pickle.dump(codes, outDataStream)
+	pickle.dump(labels, outLabelStream)
 
 	logger.info("done!")
 	logger.info("Expected # visits: " + str(n_visit_))
@@ -314,8 +317,8 @@ if __name__ == "__main__":
 	command_parser.add_argument('csvStream', type=argparse.FileType('r'), help="Path to the csv containing the data")
 	command_parser.add_argument('visitsStream', type=argparse.FileType('rb'), help="Path to the visit list pickle")
 	command_parser.add_argument('code2idxStream', type=argparse.FileType('rb'), help="Path to the code2idx dictionary pickle")
-	command_parser.add_argument('outDataStream', type=argparse.FileType('w'), help="Path to the output file for the indexes")
-	command_parser.add_argument('outLabelStream', type=argparse.FileType('w'), help='Path to the output file for the labels')
+	command_parser.add_argument('outDataStream', type=argparse.FileType('wb'), help="Path to the output file for the indexes")
+	command_parser.add_argument('outLabelStream', type=argparse.FileType('wb'), help='Path to the output file for the labels')
 	command_parser.add_argument('-t', '--timeWindow', type=float, default = 180, help="Time window in days to include codes")
 	command_parser.set_defaults(func=do_preprocess_data)
 
