@@ -245,7 +245,7 @@ def do_split_train_dev_test(args):
 	full_labels = []
 
 	print "Loading data"
-	full_data = pickls.load(args.dataFile)
+	full_data = pickle.load(args.dataFile)
 
 	print "Loading labels"
 	full_labels = pickle.load(args.labelFile)
