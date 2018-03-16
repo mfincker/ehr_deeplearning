@@ -170,7 +170,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 
 				codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
 				all_codes.append(codes)
-				all_labels.append(label_)
+				all_labels.append(int(label_))
 				max_len = max(max_len, len(codes))
 
 				codes = []
@@ -187,7 +187,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 
 	codes = [code2idx.get(c, code2idx[("-1", "UKN")]) for c in codes]
 	all_codes.append(codes)
-	all_labels.append(label_)
+	all_labels.append(int(label_))
 	max_len = max(max_len, len(codes))
 
 	assert len(all_codes) == len(all_labels), "# labels (" + str(len(all_labels)) + ") != # code sequences (" + str(len(all_codes)) + ")"
