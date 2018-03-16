@@ -245,18 +245,10 @@ def do_split_train_dev_test(args):
 	full_labels = []
 
 	print "Loading data"
-	for line in args.dataFile:
-		if len(line.strip('\n')) > 0:
-			seq = line.strip('\n').split(' ')
-			seq = [int(c) for c in seq]
-			full_data.append(seq)
+	full_data = pickls.load(args.dataFile)
 
 	print "Loading labels"
-	for line in args.labelFile:
-		if len(line.strip('\n')) > 0:
-			label = line.strip('\n')
-			label = int(label)
-			full_labels.append(label)
+	full_labels = pickle.load(args.labelFile)
 
 	train = args.train
 	dev = args.dev
@@ -323,8 +315,8 @@ if __name__ == "__main__":
 	command_parser.set_defaults(func=do_preprocess_data)
 
 	command_parser = subparsers.add_parser("split", help="Split the formatted indexed data into split / train / test sets and pickle them.")
-	command_parser.add_argument('dataFile', type=argparse.FileType('r'), help="Path to the data file")
-	command_parser.add_argument('labelFile', type=argparse.FileType('r'), help="Path to the label file")
+	command_parser.add_argument('dataFile', type=argparse.FileType('rb'), help="Path to the data file")
+	command_parser.add_argument('labelFile', type=argparse.FileType('rb'), help="Path to the label file")
 	command_parser.add_argument('-t', '--train', type = float, default = 0.8, help="Proportion of data in train set - default 0.8")
 	command_parser.add_argument('-d', '--dev', type = float, default = 0.1, help="Proportion of data in dev set - default 0.1")
 	command_parser.add_argument('-s', '--test', type = float, default = 0.1, help="Proportion of data in test set - default 0.1")
