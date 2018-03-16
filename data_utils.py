@@ -180,7 +180,7 @@ def preprocess_data(csvStream, visits, code2idx, outDataStream, outLabelStream, 
 
 	codes = filter_timeWindow(codes, timeWindow)
 
-	codes = [str(code2idx[c]) for c in codes]
+	codes = [str(code2idx.get(c, code2idx[("-1", "UKN")])) for c in codes]
 
 	max_len = max(max_len, len(codes))
 	outDataStream.write(" ".join(codes) + "\n")
