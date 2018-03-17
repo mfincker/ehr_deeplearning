@@ -1,0 +1,25 @@
+2018-03-16 20:17:09,544:INFO: Building model...
+2018-03-16 20:17:13,097:INFO: took 3.55 seconds
+2018-03-16 20:17:13,098:INFO: params:
+2018-03-16 20:17:13,098:INFO: model_output: results/gru/20180316_201624/model.weights
+loss_output: results/gru/20180316_201624/losses.tsv
+embed_size: 10000
+dropout: 0.5
+batch_size: 32
+n_epochs: 2
+cell: gru
+max_length: 10
+lr: 0.001
+log_output: results/gru/20180316_201624/log
+max_grad_norm: 10.0
+embed_type: one-hot
+output_path: results/gru/20180316_201624/
+n_features: 1
+hidden_size: 50
+clip_gradients: False
+2018-03-16 20:17:22,206:INFO: Epoch 1 out of 2
+2018-03-16 20:20:02,571:INFO: Evaluating on development data
+2018-03-16 20:26:24,011:INFO: Accuracy/Precision/Recall/F1: 0.90/nan/0.00/nan
+2018-03-16 20:26:24,014:INFO: Epoch 2 out of 2
+2018-03-16 20:29:17,166:INFO: Evaluating on development data
+2018-03-16 20:46:53,423:INFO: Accuracy/Precision/Recall/F1: 0.90/nan/0.00/nan
