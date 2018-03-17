@@ -39,8 +39,8 @@ class Config:
         self.dropout = 0.5 # not used currently
         self.embed_type = "one-hot"
         self.embed_size = 10000
-        self.hidden_size = 100
-        self.batch_size = 32
+        self.hidden_size = 10
+        self.batch_size = 64
         self.n_epochs = 10
         self.max_grad_norm = 10.
         self.lr = 0.001
@@ -49,6 +49,7 @@ class Config:
         self.embed_type = args.embed_type
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
+        self.pos_weight = 10
 
         if "model_path" in args:
             # Where to save things.
@@ -240,8 +241,9 @@ class RNNModel(RNNModel):
         Returns:
             loss: A 0-d tensor (scalar)
         """
-        loss = tf.nn.sigmoid_cross_entropy_with_logits(labels = tf.cast(self.labels_placeholder, tf.float32),
-                                                       logits = preds)
+        loss = tf.nn.weighted_cross_entropy_with_logits(targets = tf.cast(self.labels_placeholder, tf.float32),
+                                                        logits = preds,
+                                                        pos_weight = self.config.pos_weight)
         loss = tf.reduce_mean(loss) 
         return loss
 
@@ -260,6 +262,7 @@ class RNNModel(RNNModel):
             train_op: The Op for training.
         """
 
+        # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.config.lr)
         optimizer = tf.train.AdamOptimizer(learning_rate=self.config.lr)
 
         gradients = optimizer.compute_gradients(loss)
@@ -363,6 +366,9 @@ def load_and_preprocess_data(args):
 
     logger.info("Loading training data...")
     train_x = pickle.load(args.train_x)
+    # Remove zero indices
+    train_x = [[x for x in seq if x != 0] for seq in train_x]
+    # Remove seq with length 0
     zero_code = [i for i, x in enumerate(train_x) if len(x) == 0]
     train_x = [x for i, x in enumerate(train_x) if i not in zero_code]
     train_y = pickle.load(args.train_y)
@@ -373,6 +379,7 @@ def load_and_preprocess_data(args):
 
     logger.info("Loading dev data...")
     dev_x = pickle.load(args.dev_x)
+    dev_x = [[x for x in seq if x != 0] for seq in dev_x]
     zero_code = [i for i, x in enumerate(dev_x) if len(x) == 0]
     dev_x = [x for i, x in enumerate(dev_x) if i not in zero_code]
     dev_y = pickle.load(args.dev_y)
@@ -383,6 +390,7 @@ def load_and_preprocess_data(args):
 
     logger.info("Loading test data...")
     test_x = pickle.load(args.test_x)
+    test_x = [[x for x in seq if x != 0] for seq in test_x]
     zero_code = [i for i, x in enumerate(test_x) if len(x) == 0]
     test_x = [x for i, x in enumerate(test_x) if i not in zero_code]
     test_y = pickle.load(args.test_y)
@@ -490,13 +498,19 @@ if __name__ == "__main__":
     command_parser.set_defaults(func=do_test2)
 
     command_parser = subparsers.add_parser('train', help='')
+    # command_parser.add_argument('-tx','--train_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Training data x")
+    # command_parser.add_argument('-ty','--train_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Training data y")
+    # command_parser.add_argument('-dx','--dev_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Dev data x")
+    # command_parser.add_argument('-dy','--dev_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Dev data y")
+    # command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Test data x")
+    # command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Test data y")
     command_parser.add_argument('-tx','--train_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.train_x.pyc", help="Training data x")
     command_parser.add_argument('-ty','--train_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.train_y.pyc", help="Training data y")
     command_parser.add_argument('-dx','--dev_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.dev_x.pyc", help="Dev data x")
     command_parser.add_argument('-dy','--dev_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.dev_y.pyc", help="Dev data y")
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
-    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
+    command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
     command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
