@@ -10,9 +10,6 @@ import tensorflow as tf
 from util import Progbar, minibatches
 import numpy as np
 
-
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-
 logger = logging.getLogger("RNN")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
@@ -60,10 +57,10 @@ class RNNModel(object):
         correct_preds, total_correct, total_preds = 0., 0., 0.
         labels, preds = self.output(sess, x, y)
 
-        accuracy = accuracy_score(labels, preds)
-        precision = precision_score(labels, preds)
-        recall = recall_score(labels, preds)
-        f1 = f1_score(labels, preds)
+        accuracy = sum([l == p for l, p in zip(labels, preds)]) / float(len(labels))
+        precision = sum([l == p for l, p in zip(labels, preds) if l == 1]) / float(sum(preds))
+        recall = sum([l == p for l, p in zip(labels, preds) if l == 1]) / float(sum(labels))
+        f1 = 2 / (1/precision + 1/recall)
 
         return (accuracy, precision, recall, f1)
 
@@ -115,7 +112,7 @@ class RNNModel(object):
                 batch_losses.append(loss)
 
             epoch_losses.append(batch_losses)
-            
+
             logger.info("Evaluating on training data")
             entity_scores = self.evaluate(session, train_x, train_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
