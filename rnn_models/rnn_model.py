@@ -113,9 +113,9 @@ class RNNModel(object):
 
             epoch_losses.append(batch_losses)
 
-            logger.info("Evaluating on training data")
-            entity_scores = self.evaluate(session, train_x, train_y)
-            logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
+            # logger.info("Evaluating on training data")
+            # entity_scores = self.evaluate(session, train_x, train_y)
+            # logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
             logger.info("Evaluating on development data")
             entity_scores = self.evaluate(session, dev_x, dev_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
