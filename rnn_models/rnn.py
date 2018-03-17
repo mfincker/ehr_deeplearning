@@ -14,6 +14,7 @@ import time
 import os
 from datetime import datetime
 import cPickle as pickle
+from random import random
 
 import tensorflow as tf
 import numpy as np
@@ -34,14 +35,14 @@ class Config:
     """
     def __init__(self, args):
         self.n_features = 1 # 1 code at a time is fed
-        self.max_length = 600 # longest sequence to parse
+        self.max_length = 60 # longest sequence to parse
         # self.n_classes = 2
         self.dropout = 0.5 # not used currently
         self.embed_type = "one-hot"
         self.embed_size = 10000
         self.hidden_size = 10
         self.batch_size = 64
-        self.n_epochs = 10
+        self.n_epochs = 5
         self.max_grad_norm = 10.
         self.lr = 0.001
         self.clip_gradients = False
@@ -49,7 +50,7 @@ class Config:
         self.embed_type = args.embed_type
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
-        self.pos_weight = 10
+        self.pos_weight = 1
 
         if "model_path" in args:
             # Where to save things.
@@ -364,40 +365,40 @@ def do_test2(args):
 
 def load_and_preprocess_data(args):
 
+    def remove_ukn_zero(xStream, yStream):
+        x = pickle.load(xStream)
+        y = pickle.load(yStream)
+        x_ = [[c for c in seq if c != 0] for seq in x]
+        zero_code = [i for i, c in enumerate(x_) if len(c) == 0]
+        x_ = [c for i, c in enumerate(x_) if i not in zero_code]
+        y_ = [l for i, l in enumerate(y) if i not in zero_code]
+
+        # Remove 80% of the negative examples
+        x_sampled = []
+        y_sampled = []
+        for c, l in zip(x_, y_):
+            if l == 0 and random() < 0.8:
+                continue
+            else:
+                x_sampled.append(c)
+                y_sampled.append(l)
+
+        max_length = max([len(v) for v in x_sampled])
+        assert len(x_sampled) == len(y_sampled), "train x and y don't have the same length."
+
+        return x_sampled, y_sampled, max_length
+
     logger.info("Loading training data...")
-    train_x = pickle.load(args.train_x)
-    # Remove zero indices
-    train_x = [[x for x in seq if x != 0] for seq in train_x]
-    # Remove seq with length 0
-    zero_code = [i for i, x in enumerate(train_x) if len(x) == 0]
-    train_x = [x for i, x in enumerate(train_x) if i not in zero_code]
-    train_y = pickle.load(args.train_y)
-    train_y = [x for i, x in enumerate(train_y) if i not in zero_code]
-    assert len(train_x) == len(train_y), "train x and y don't have the same length."
+    train_x, train_y, max_length_train = remove_ukn_zero(args.train_x, args.train_y)
     logger.info("Done. Read %d sentences", len(train_y))
-    max_length_train = max([len(v) for v in train_x])
 
     logger.info("Loading dev data...")
-    dev_x = pickle.load(args.dev_x)
-    dev_x = [[x for x in seq if x != 0] for seq in dev_x]
-    zero_code = [i for i, x in enumerate(dev_x) if len(x) == 0]
-    dev_x = [x for i, x in enumerate(dev_x) if i not in zero_code]
-    dev_y = pickle.load(args.dev_y)
-    dev_y = [x for i, x in enumerate(dev_y) if i not in zero_code]
-    assert len(dev_x) == len(dev_y), "dev x and y don't have the same length."
+    dev_x, dev_y, max_length_dev = remove_ukn_zero(args.dev_x, args.dev_y)
     logger.info("Done. Read %d sentences", len(dev_y))
-    max_length_dev = max([len(v) for v in dev_x])
 
     logger.info("Loading test data...")
-    test_x = pickle.load(args.test_x)
-    test_x = [[x for x in seq if x != 0] for seq in test_x]
-    zero_code = [i for i, x in enumerate(test_x) if len(x) == 0]
-    test_x = [x for i, x in enumerate(test_x) if i not in zero_code]
-    test_y = pickle.load(args.test_y)
-    test_y = [x for i, x in enumerate(test_y) if i not in zero_code]
-    assert len(test_x) == len(test_y), "test x and y don't have the same length."
+    test_x, test_y, max_length_test = remove_ukn_zero(args.test_x, args.test_y)
     logger.info("Done. Read %d sentences", len(test_y))
-    max_length_test = max([len(v) for v in test_x])
 
     max_length = max(max_length_train, max_length_dev, max_length_test)
     
