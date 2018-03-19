@@ -360,6 +360,15 @@ def do_aggregate_test(args):
 	print data[1][1000 - 1]
 	print data[2]
 
+	with open("test_x.aggregated.tsv") as f:
+		for seq in data:
+			seq = [str(s) for s in seq]
+			f.write("\t".join(seq) + "\n")
+
+	with open("test_y.aggregated.tsv") as f:
+		for l in labels:
+			f.write(str(l) + "\n")
+
 
 
 def do_aggregate(args):
