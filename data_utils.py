@@ -286,6 +286,54 @@ def do_split_train_dev_test(args):
 	with open(root + ".test_y.pyc", 'wb') as f:
 		pickle.dump(test_y, f)
 
+def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 40):
+	'''Given a list of list of code indices in the rnn feed format, 
+	returns a list of list of len num_idx with the count of each codes 
+	encountered in this visit''' 
+
+	idx_to_remove = [code2idx[c] for c, _ in counter.most_common(too_common_idx)]
+	idx_to_remove.append(0)
+
+	idx_to_keep = [code2idx[c] for c, _ in counter.most_common(num_idx) if code2idx[c] not in idx_to_remove]
+	new_idx_map = {idx: i for i, idx in enumerate(idx_to_keep)} 
+
+
+	data = [[new_idx_map[c] for c in seq if c in idx_to_keep] for seq in data]
+
+	zero_length = [i for i, seq in enumerate(data) if len(seq) == 0]
+	data = [seq for i, seq in enumerate(data) if i not in zero_length]
+	labels = [l for i, l in enumerate(labels) if i not in zero_length]
+
+	aggregated_data = []
+	for seq in data:
+		aggregate_visit = [0] * len()
+		for c in seq:
+			aggregate_visit[c] = aggregate_visit[c] + 1
+		aggregated_data.append(aggregate_visit)
+
+	return aggregated_data, labels
+
+def do_aggregate(args):
+	x = args.x
+	y = args.y
+	counter = args.counter
+	code2idx = args.code2idx
+	num_idx = args.num_idx
+	too_common_idx = args.too_common_idx
+
+	data, labels = aggregate(x, y, counter, code2idx)
+
+	with open(".".join(x.name.slpit('.')[:-1]) + ".aggregated.tsv") as f:
+		for seq in data:
+			seq = [str(s) for s in seq]
+			f.write("\t".join(seq) + "\n")
+
+	with open(".".join(y.name.slpit('.')[:-1]) + ".aggregated.tsv") as f:
+		for l in labels:
+			f.write(str(l) + "\n")
+		
+
+
 
 
 
@@ -327,6 +375,14 @@ if __name__ == "__main__":
 	command_parser.add_argument('-d', '--dev', type = float, default = 0.1, help="Proportion of data in dev set - default 0.1")
 	command_parser.add_argument('-s', '--test', type = float, default = 0.1, help="Proportion of data in test set - default 0.1")
 	command_parser.set_defaults(func=do_split_train_dev_test)
+
+	command_parser = subparsers.add_parser("aggregate")
+	command_parser.add_argument("rnn_data", type = argparse.FileType('rb'), help = "Path to the rnn data to aggregate")
+	command_parser.add_argument("rnn_label", type = argparse.FileType('rb'), help ="Path to the rnn labels to aggregate")
+	command_parser.add_argument("counter", type = argparse.FileType('rb'), help = "path to the counter")
+	command_parser.add_argument("code2idx", type = argparse.FileType('rb'), help = "path to the code2idx dict")
+	command_parser.add_argument("-n", "--num_idx", type = int, default = 1000, help = "Number of codes to keep")
+	command_parser.add_argument("--too_common_idx", type = int, default = 40, help = "Number of most common indices to remove")
 
 	ARGS = parser.parse_args()
 	if ARGS.func is None:
