@@ -379,7 +379,7 @@ def do_aggregate(args):
 	num_idx = args.num_idx
 	too_common_idx = args.too_common_idx
 
-	data, labels = aggregate(x, y, counter, code2idx)
+	data, labels = aggregate(x, y, num_idx, too_common_idx)
 
 	with open(".".join(x.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for seq in data:
