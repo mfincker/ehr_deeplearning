@@ -381,12 +381,12 @@ def do_aggregate(args):
 
 	data, labels = aggregate(x, y, counter, code2idx)
 
-	with open(".".join(x.name.slpit('.')[:-1]) + ".aggregated.tsv") as f:
+	with open(".".join(x.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for seq in data:
 			seq = [str(s) for s in seq]
 			f.write("\t".join(seq) + "\n")
 
-	with open(".".join(y.name.slpit('.')[:-1]) + ".aggregated.tsv") as f:
+	with open(".".join(y.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for l in labels:
 			f.write(str(l) + "\n")
 		
