@@ -372,8 +372,8 @@ def do_aggregate_test(args):
 
 
 def do_aggregate(args):
-	x = pickle.load(args.x)
-	y = pickle.load(args.y)
+	x = pickle.load(args.rnn_data)
+	y = pickle.load(args.rnn_label)
 	# counter = pickle.load(args.counter)
 	# code2idx = pickle.load(args.code2idx)
 	num_idx = args.num_idx
