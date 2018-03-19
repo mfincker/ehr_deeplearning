@@ -313,11 +313,25 @@ def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 
 
 	return aggregated_data, labels
 
+def do_aggregate_test(args):
+	x = [[0, 10, 12, 1, 3000, 5000],
+		[0, 0]]
+	y = [1, 1]
+
+	counter = pickle.load(args.counter)
+	code2idx = pickle.load(args.code2idx)
+	num_idx = args.num_idx
+	too_common_idx = args.too_common_idx
+
+	print aggregate(x, y, counter, code2idx, num_idx, too_common_idx)
+
+
+
 def do_aggregate(args):
-	x = args.x
-	y = args.y
-	counter = args.counter
-	code2idx = args.code2idx
+	x = pickle.load(args.x)
+	y = pickle.load(args.y)
+	counter = pickle.load(args.counter)
+	code2idx = pickle.load(args.code2idx)
 	num_idx = args.num_idx
 	too_common_idx = args.too_common_idx
 
@@ -383,6 +397,16 @@ if __name__ == "__main__":
 	command_parser.add_argument("code2idx", type = argparse.FileType('rb'), help = "path to the code2idx dict")
 	command_parser.add_argument("-n", "--num_idx", type = int, default = 1000, help = "Number of codes to keep")
 	command_parser.add_argument("--too_common_idx", type = int, default = 40, help = "Number of most common indices to remove")
+	command_parser.set_defaults(func=do_aggregate)
+
+	command_parser = subparsers.add_parser("test_aggregate")
+	# command_parser.add_argument("rnn_data", type = argparse.FileType('rb'), help = "Path to the rnn data to aggregate")
+	# command_parser.add_argument("rnn_label", type = argparse.FileType('rb'), help ="Path to the rnn labels to aggregate")
+	command_parser.add_argument("counter", type = argparse.FileType('rb'), help = "path to the counter")
+	command_parser.add_argument("code2idx", type = argparse.FileType('rb'), help = "path to the code2idx dict")
+	command_parser.add_argument("-n", "--num_idx", type = int, default = 1000, help = "Number of codes to keep")
+	command_parser.add_argument("--too_common_idx", type = int, default = 40, help = "Number of most common indices to remove")
+	command_parser.set_defaults(func=do_aggregate_test)
 
 	ARGS = parser.parse_args()
 	if ARGS.func is None:
