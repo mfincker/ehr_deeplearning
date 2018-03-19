@@ -358,7 +358,7 @@ def do_aggregate_test(args):
 	print data[0][460 - 1]
 	print data[0][210 - 1]
 	print data[1][1000 - 1]
-	print data[2]
+	# print data[2]
 
 	with open("test_x.aggregated.tsv") as f:
 		for seq in data:
