@@ -520,6 +520,7 @@ if __name__ == "__main__":
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
     command_parser.set_defaults(func=do_train)
 
     # command_parser = subparsers.add_parser('evaluate', help='')
