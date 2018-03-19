@@ -318,8 +318,6 @@ def aggregate(data, labels, num_idx = 1000, too_common_idx = 40):
 	'''Given a list of list of code indices in the rnn feed format, 
 	returns a list of list of len num_idx with the count of each codes 
 	encountered in this visit''' 
-	print data
-	print labels
 
 	idx_to_remove = too_common_idx
 	idx_to_keep = num_idx + too_common_idx
@@ -329,9 +327,6 @@ def aggregate(data, labels, num_idx = 1000, too_common_idx = 40):
 	zero_length = [i for i, seq in enumerate(data) if len(seq) == 0]
 	data = [seq for i, seq in enumerate(data) if i not in zero_length]
 	labels = [l for i, l in enumerate(labels) if i not in zero_length]
-
-	print data
-	print labels
 
 	aggregated_data = []
 	for seq in data:
@@ -381,12 +376,12 @@ def do_aggregate(args):
 
 	data, labels = aggregate(x, y, num_idx, too_common_idx)
 
-	with open(".".join(x.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
+	with open(".".join(args.rnn_data.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for seq in data:
 			seq = [str(s) for s in seq]
 			f.write("\t".join(seq) + "\n")
 
-	with open(".".join(y.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
+	with open(".".join(args.rnn_label.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for l in labels:
 			f.write(str(l) + "\n")
 		
