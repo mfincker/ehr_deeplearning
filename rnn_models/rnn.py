@@ -51,6 +51,7 @@ class Config:
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
         self.pos_weight = 1
+        self.idx_to_remove = args.idx_to_remove
 
         if "model_path" in args:
             # Where to save things.
