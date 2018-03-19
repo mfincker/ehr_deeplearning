@@ -19,7 +19,7 @@ from random import random
 import tensorflow as tf
 import numpy as np
 
-from rnn_model import RNNModel
+from rnn_model import DLModel
 
 
 logger = logging.getLogger("RNN")
