@@ -293,6 +293,7 @@ def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 
 
 	idx_to_remove = [code2idx[c] for c, _ in counter.most_common(too_common_idx)]
 	idx_to_remove.append(0)
+	print idx_to_remove
 
 	idx_to_keep = [code2idx[c] for c, _ in counter.most_common(num_idx) if code2idx[c] not in idx_to_remove]
 	new_idx_map = {idx: i for i, idx in enumerate(idx_to_keep)} 
