@@ -318,6 +318,8 @@ def aggregate(data, labels, num_idx = 1000, too_common_idx = 40):
 	'''Given a list of list of code indices in the rnn feed format, 
 	returns a list of list of len num_idx with the count of each codes 
 	encountered in this visit''' 
+	print data
+	print labels
 
 	idx_to_remove = too_common_idx
 	idx_to_keep = num_idx + too_common_idx
@@ -327,6 +329,9 @@ def aggregate(data, labels, num_idx = 1000, too_common_idx = 40):
 	zero_length = [i for i, seq in enumerate(data) if len(seq) == 0]
 	data = [seq for i, seq in enumerate(data) if i not in zero_length]
 	labels = [l for i, l in enumerate(labels) if i not in zero_length]
+
+	print data
+	print labels
 
 	aggregated_data = []
 	for seq in data:
@@ -348,7 +353,12 @@ def do_aggregate_test(args):
 	num_idx = args.num_idx
 	too_common_idx = args.too_common_idx
 
-	print aggregate(x, y, num_idx, too_common_idx)
+	data, labels = aggregate(x, y, num_idx, too_common_idx)
+
+	print data[0][460]
+	print data[0][210]
+	print data[1][1000]
+	print data[2]
 
 
 
@@ -356,7 +366,7 @@ def do_aggregate(args):
 	x = pickle.load(args.x)
 	y = pickle.load(args.y)
 	# counter = pickle.load(args.counter)
-	code2idx = pickle.load(args.code2idx)
+	# code2idx = pickle.load(args.code2idx)
 	num_idx = args.num_idx
 	too_common_idx = args.too_common_idx
 
