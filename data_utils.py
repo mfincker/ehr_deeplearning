@@ -330,7 +330,7 @@ def aggregate(data, labels, code2idx, num_idx = 1000, too_common_idx = 40):
 
 	aggregated_data = []
 	for seq in data:
-		aggregate_visit = [0] * num_idx
+		aggregate_visit = [0] * num_idx 
 		for c in seq:
 			aggregate_visit[c - idx_to_remove - 1] = aggregate_visit[c - idx_to_remove - 1] + 1
 		aggregated_data.append(aggregate_visit)
@@ -339,7 +339,8 @@ def aggregate(data, labels, code2idx, num_idx = 1000, too_common_idx = 40):
 
 def do_aggregate_test(args):
 	x = [[0, 10, 12, 1, 500, 250],
-		[0, 0]]
+		[0, 0],
+		[1040, 1041]]
 	y = [1, 1]
 
 	counter = pickle.load(args.counter)
