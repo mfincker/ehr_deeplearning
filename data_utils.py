@@ -355,9 +355,9 @@ def do_aggregate_test(args):
 
 	data, labels = aggregate(x, y, num_idx, too_common_idx)
 
-	print data[0][460]
-	print data[0][210]
-	print data[1][1000]
+	print data[0][460 - 1]
+	print data[0][210 - 1]
+	print data[1][1000 - 1]
 	print data[2]
 
 
