@@ -111,7 +111,7 @@ def pad_sequences(data, max_length):
         ### END YOUR CODE ###
     return ret
 
-class RNNModel(RNNModel):
+class RNNModel(DLModel):
     """
     Implements a recursive neural network with an embedding layer and
     single hidden layer.
@@ -217,13 +217,13 @@ class RNNModel(RNNModel):
 
         preds, _ = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32) # size (batch_size, time_step, hidden_size)
 
-        # preds = tf.gather_nd(preds, indices = idx)
+        # Only keep last state that corresponds to a real code - using index_placeholder
         batch_size = tf.shape(preds)[0]
         max_length = tf.shape(preds)[1]
         state_size = int(preds.get_shape()[2])
         idx = tf.range(0, batch_size) * max_length + (self.index_placeholder)
         preds = tf.reshape(preds, [-1, state_size]) # reshape to (batch_size * time_step, hidden_size)
-        preds = tf.gather(preds, idx)
+        preds = tf.gather(preds, idx) # shape (batch_size, hidden_size)
 
         # Prediction layer
         U = tf.get_variable(name = "U", shape = [self.config.hidden_size, 1], initializer = tf.contrib.layers.xavier_initializer())
@@ -239,6 +239,7 @@ class RNNModel(RNNModel):
         Args:
             pred: A tensor of shape (batch_size, 1) containing the output of the neural
                   network before the sigmoid.
+
         Returns:
             loss: A 0-d tensor (scalar)
         """
@@ -272,7 +273,7 @@ class RNNModel(RNNModel):
         if self.config.clip_gradients:
             gradients, _ = tf.clip_by_global_norm(gradients, self.config.max_grad_norm)
         
-        self.grad_norm = tf.global_norm(gradients)
+        # self.grad_norm = tf.global_norm(gradients)
         gradients = zip(gradients, variables)            
         
         train_op = optimizer.apply_gradients(gradients)
@@ -296,7 +297,7 @@ class RNNModel(RNNModel):
     def train_on_batch(self, sess, inputs_batch, index_batch, labels_batch):
         feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, index_batch=index_batch,
                                      dropout=self.config.dropout)
-        _, loss = sess.run([self.train_op, self.loss], feed_dict=feed)
+        loss, _ = sess.run([self.loss, self.train_op], feed_dict=feed)
         return loss
 
     def __init__(self, config, pretrained_embeddings = None, report=None):
@@ -365,10 +366,13 @@ def do_test2(args):
 
 def load_and_preprocess_data(args):
 
-    def remove_ukn_zero(xStream, yStream):
+    def remove_ukn_zero_most_common(xStream, yStream, idxToRemoveStream):
         x = pickle.load(xStream)
         y = pickle.load(yStream)
-        x_ = [[c for c in seq if c != 0] for seq in x]
+        idx_to_remove = pickle.load(idxToRemoveStream)
+        idx_to_remove.add(0)
+
+        x_ = [[c for c in seq if (c not in idx_to_remove)] for seq in x]
         zero_code = [i for i, c in enumerate(x_) if len(c) == 0]
         x_ = [c for i, c in enumerate(x_) if i not in zero_code]
         y_ = [l for i, l in enumerate(y) if i not in zero_code]
@@ -511,7 +515,7 @@ if __name__ == "__main__":
     command_parser.add_argument('-dy','--dev_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.dev_y.pyc", help="Dev data y")
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
-    command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
+    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
     command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
@@ -527,15 +531,6 @@ if __name__ == "__main__":
     # command_parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout, help="Training data")
     # command_parser.set_defaults(func=do_evaluate)
 
-    # command_parser = subparsers.add_parser('shell', help='')
-    # command_parser.add_argument('-m', '--model-path', help="Training data")
-    # command_parser.add_argument('-v', '--vocab', type=argparse.FileType('r'), default="data/vocab.txt", help="Path to vocabulary file")
-    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    # command_parser.add_argument('-c', '--cell', choices=["rnn", "gru"], default="rnn", help="Type of RNN cell to use.")
-    # command_parser.set_defaults(func=do_shell)
-
-    # command_parser = subparsers.add_parser("test")
-    # command_parser.set_defaults(func=test)
 
     ARGS = parser.parse_args()
     if ARGS.func is None:

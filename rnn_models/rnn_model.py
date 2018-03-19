@@ -3,8 +3,9 @@
 """
 RNN model for EHR project - adapted from CS224N
 """
-import pdb
+
 import logging
+from __future__ import division
 
 import tensorflow as tf
 from util import Progbar, minibatches
@@ -14,7 +15,7 @@ logger = logging.getLogger("RNN")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
-class RNNModel(object):
+class DLModel(object):
     """
     Implements special functionality for NER models.
     """
@@ -57,9 +58,9 @@ class RNNModel(object):
         correct_preds, total_correct, total_preds = 0., 0., 0.
         labels, preds = self.output(sess, x, y)
 
-        accuracy = sum([l == p for l, p in zip(labels, preds)]) / float(len(labels))
-        precision = sum([l == p for l, p in zip(labels, preds) if l == 1]) / float(sum(preds))
-        recall = sum([l == p for l, p in zip(labels, preds) if l == 1]) / float(sum(labels))
+        accuracy = sum([l == p for l, p in zip(labels, preds)]) / len(labels)
+        precision = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(preds)
+        recall = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(labels)
         f1 = 2 / (1/precision + 1/recall)
 
         return (accuracy, precision, recall, f1)
@@ -81,7 +82,6 @@ class RNNModel(object):
 
             batch_ = batch[:-1]
             labels_ = batch[-1]
-            neg_idx = np.sum(batch[1] < 0)
 
             preds_ = self.predict_on_batch(sess, *batch_)
 
