@@ -3,9 +3,8 @@
 """
 RNN model for EHR project - adapted from CS224N
 """
-
-import logging
 from __future__ import division
+import logging
 
 import tensorflow as tf
 from util import Progbar, minibatches
