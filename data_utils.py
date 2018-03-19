@@ -286,20 +286,43 @@ def do_split_train_dev_test(args):
 	with open(root + ".test_y.pyc", 'wb') as f:
 		pickle.dump(test_y, f)
 
-def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 40):
+# def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 40):
+# 	'''Given a list of list of code indices in the rnn feed format, 
+# 	returns a list of list of len num_idx with the count of each codes 
+# 	encountered in this visit''' 
+
+# 	idx_to_remove = [code2idx[c] for c, _ in counter.most_common(too_common_idx)]
+# 	idx_to_remove.append(0)
+# 	print idx_to_remove
+
+# 	idx_to_keep = [code2idx[c] for c, _ in counter.most_common(num_idx) if code2idx[c] not in idx_to_remove]
+# 	new_idx_map = {idx: i for i, idx in enumerate(idx_to_keep)} 
+
+
+# 	data = [[new_idx_map[c] for c in seq if c in idx_to_keep] for seq in data]
+
+# 	zero_length = [i for i, seq in enumerate(data) if len(seq) == 0]
+# 	data = [seq for i, seq in enumerate(data) if i not in zero_length]
+# 	labels = [l for i, l in enumerate(labels) if i not in zero_length]
+
+# 	aggregated_data = []
+# 	for seq in data:
+# 		aggregate_visit = [0] * num_idx
+# 		for c in seq:
+# 			aggregate_visit[c] = aggregate_visit[c] + 1
+# 		aggregated_data.append(aggregate_visit)
+
+# 	return aggregated_data, labels
+
+def aggregate(data, labels, code2idx, num_idx = 1000, too_common_idx = 40):
 	'''Given a list of list of code indices in the rnn feed format, 
 	returns a list of list of len num_idx with the count of each codes 
 	encountered in this visit''' 
 
-	idx_to_remove = [code2idx[c] for c, _ in counter.most_common(too_common_idx)]
-	idx_to_remove.append(0)
-	print idx_to_remove
+	idx_to_remove = too_common_idx
+	idx_to_keep = num_idx + too_common_idx
 
-	idx_to_keep = [code2idx[c] for c, _ in counter.most_common(num_idx) if code2idx[c] not in idx_to_remove]
-	new_idx_map = {idx: i for i, idx in enumerate(idx_to_keep)} 
-
-
-	data = [[new_idx_map[c] for c in seq if c in idx_to_keep] for seq in data]
+	data = [[c for c in seq if c > idx_to_remove and c <= idx_to_keep] for seq in data]
 
 	zero_length = [i for i, seq in enumerate(data) if len(seq) == 0]
 	data = [seq for i, seq in enumerate(data) if i not in zero_length]
@@ -307,9 +330,9 @@ def aggregate(data, labels, counter, code2idx, num_idx = 1000, too_common_idx = 
 
 	aggregated_data = []
 	for seq in data:
-		aggregate_visit = [0] * len()
+		aggregate_visit = [0] * num_idx
 		for c in seq:
-			aggregate_visit[c] = aggregate_visit[c] + 1
+			aggregate_visit[c - idx_to_remove - 1] = aggregate_visit[c - idx_to_remove - 1] + 1
 		aggregated_data.append(aggregate_visit)
 
 	return aggregated_data, labels
