@@ -343,7 +343,7 @@ def aggregate(data, labels, num_idx = 1000, too_common_idx = 40):
 	return aggregated_data, labels
 
 def do_aggregate_test(args):
-	x = [[0, 10, 12, 1, 500, 250],
+	x = [[0, 10, 12, 1, 40, 41, 500, 250],
 		[0, 0],
 		[1040, 1041]]
 	y = [1, 1]
