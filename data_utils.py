@@ -376,12 +376,12 @@ def do_aggregate(args):
 
 	data, labels = aggregate(x, y, num_idx, too_common_idx)
 
-	with open(".".join(args.rnn_data.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
+	with open(".".join(args.rnn_data.name.split('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for seq in data:
 			seq = [str(s) for s in seq]
 			f.write("\t".join(seq) + "\n")
 
-	with open(".".join(args.rnn_label.name.slpit('.')[:-1]) + ".aggregated.tsv", "w") as f:
+	with open(".".join(args.rnn_label.name.split('.')[:-1]) + ".aggregated.tsv", "w") as f:
 		for l in labels:
 			f.write(str(l) + "\n")
 		
