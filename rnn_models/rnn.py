@@ -20,7 +20,7 @@ import tensorflow as tf
 import numpy as np
 
 from rnn_model import DLModel
-from q3_gru_cell import GRUCell
+from gru_cell import GRUCell
 
 
 logger = logging.getLogger("RNN")
