@@ -20,6 +20,7 @@ import tensorflow as tf
 import numpy as np
 
 from rnn_model import DLModel
+from q3_gru_cell import GRUCell
 
 
 logger = logging.getLogger("RNN")
@@ -35,14 +36,14 @@ class Config:
     """
     def __init__(self, args):
         self.n_features = 1 # 1 code at a time is fed
-        self.max_length = 600 # longest sequence to parse
+        self.max_length = 50 # longest sequence to parse
         # self.n_classes = 2
         self.dropout = 0.5 # not used currently
         self.embed_type = "one-hot"
         self.embed_size = 10000
-        self.hidden_size = 50
-        self.batch_size = 64
-        self.n_epochs = 1
+        self.hidden_size = 100
+        self.batch_size = 16
+        self.n_epochs = 500
         self.max_grad_norm = 10.
         self.lr = 0.001
         self.clip_gradients = False
@@ -50,8 +51,10 @@ class Config:
         self.embed_type = args.embed_type
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
-        self.pos_weight = 2
+        self.pos_weight = 1.05
         self.idx_to_remove = args.idx_to_remove
+        self.feature_size = 500
+        self.train_x = args.train_x.name
 
         if "model_path" in args:
             # Where to save things.
@@ -187,12 +190,12 @@ class RNNModel(DLModel):
                                     off_value=0,
                                     axis=-1,
                                     # dtype=tf.int32,
-                                    name="one_hot_embedded_input"
+                                    name="one_hot_embedded_input",
                                 ), tf.float32)
         else:
             embeddings = tf.Variable(self.pretrained_embeddings, dtype = tf.float32, name = "vocabulary", trainable=True)
             embeddings = tf.nn.embedding_lookup(params = embeddings, ids = self.input_placeholder)
-            embeddings = tf.reshape(tensor = embeddings, shape = [-1, self.max_length, self.config.n_features * self.config.embed_size])                                                  
+            embeddings = tf.reshape(tensor = embeddings, shape = [-1, self.config.max_length, self.config.n_features * self.config.embed_size])                                                  
                    
         return embeddings
 
@@ -203,21 +206,34 @@ class RNNModel(DLModel):
             pred: tf.Tensor of shape (batch_size, 1)
         """
 
-        preds = [] # Predicted output at each timestep should go here!
+
 
         if self.config.cell == "rnn":
             cell = tf.contrib.rnn.BasicRNNCell(self.config.hidden_size)
-        elif self.config.cell == "gru":
+        elif self.config.cell == "gru_tf":
             cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
+        elif self.config.cell == "gru":
+            cell = GRUCell(self.config.feature_size, self.config.hidden_size)
         elif self.config.cell == "lstm":
-            cell = tf.nn.rnn_cell.LSTMCell(self.config.hidden_size)
+            cell = tf.contrib.rnn.LSTMCell(self.config.hidden_size)
         elif self.config.cell == "multi_gru":
-            rnn_layers = [tf.nn.rnn_cell.GRUCell(size) for size in [300, 150, self.config.hidden_size]]
-            cell = tf.nn.rnn_cell.MultiRNNCell(rnn_layers)
+            rnn_layers = [tf.contrib.rnn.GRUCell(size) for size in [300, 150, self.config.hidden_size]]
+            cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
+        elif self.config.cell == "multi_rnn":
+            rnn_layers = [tf.contrib.rnn.BasicRNNCell(size) for size in [300, 150, self.config.hidden_size]]
+            cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
         else:
             raise ValueError("Unsupported cell type.")
 
         x = self.add_embedding()
+
+        batch_size = tf.shape(x)[0]
+        x = tf.reshape(x, [batch_size * self.config.max_length, self.config.embed_size])
+        U0 = tf.get_variable(name = "U0", shape = [self.config.embed_size, self.config.feature_size], initializer = tf.contrib.layers.xavier_initializer())
+        b0 = tf.get_variable(name = "b0", shape = [self.config.feature_size])
+        x = tf.tanh(tf.matmul(x, U0) + b0)
+        x = tf.reshape(x, shape = [batch_size, self.config.max_length, self.config.feature_size])
+
 
         preds, _ = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32) # size (batch_size, time_step, hidden_size)
 
@@ -370,7 +386,7 @@ def do_test2(args):
 
 def load_and_preprocess_data(args, train = True, dev = True, test = True):
 
-    def remove_ukn_zero_most_common(xStream, yStream, idxToRemoveStream):
+    def remove_ukn_zero_most_common(xStream, yStream, idx_to_remove):
         x = pickle.load(xStream)
         y = pickle.load(yStream)
         idx_to_remove = 40
@@ -426,7 +442,16 @@ def load_embeddings(args):
 def do_train(args):
     # Set up some parameters.
     config = Config(args)
-    train_x, train_y, dev_x, dev_y, test_x, test_y, max_length = load_and_preprocess_data(args)
+    train_x, train_y, dev_x, dev_y, test_x, test_y, max_length = load_and_preprocess_data(args, test = False)
+    
+    keep_train = 2000
+    keep_dev = 200
+    logger.info("keeping only %d train examples and %d dev examples", [2000, 200])
+    train_x = train_x[:keep_train]
+    train_y = train_y[:keep_train]
+    dev_x = dev_x[:keep_dev]
+    dev_y = dev_y[:keep_dev]
+
     config.max_length = min(max_length, config.max_length)
 
     if config.embed_type != "one-hot":
@@ -537,7 +562,7 @@ if __name__ == "__main__":
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru"], default="rnn", help="Type of RNN cell to use.")
+    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "gru_tf", "lstm", "multi_gru", "multi_rnn"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
@@ -552,11 +577,11 @@ if __name__ == "__main__":
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru"], default="rnn", help="Type of RNN cell to use.")
+    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru", "multi_rnn"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
-    command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = int, default=40, help="indice of the last too common code to remove")
     command_parser.add_argument('model_path', help="Training data")
     # command_parser.add_argument('-v', '--vocab', type=argparse.FileType('r'), default="data/vocab.txt", help="Path to vocabulary file")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
