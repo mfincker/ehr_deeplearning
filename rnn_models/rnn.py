@@ -446,7 +446,7 @@ def do_train(args):
     
     keep_train = 2000
     keep_dev = 200
-    logger.info("keeping only %d train examples and %d dev examples", [2000, 200])
+    logger.info("keeping only %d train examples and %d dev examples" % (2000, 200))
     train_x = train_x[:keep_train]
     train_y = train_y[:keep_train]
     dev_x = dev_x[:keep_dev]
