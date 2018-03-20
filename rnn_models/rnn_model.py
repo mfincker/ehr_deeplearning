@@ -101,10 +101,12 @@ class DLModel(object):
 
         epoch_losses = []
         for epoch in range(self.config.n_epochs):
-            if epoch == 10:
-                prev_lr = self.config.lr
-                self.config.lr = 0.0001
-                logger.info("Updating lr from %f to %f", [prev_lr, self.config.lr])
+            if self.config.adaptive_lr:
+                pass
+                # if epoch == 10:
+                    # prev_lr = self.config.lr
+                    # self.config.lr = 0.0001
+                    # logger.info("Updating lr from %f to %f", [prev_lr, self.config.lr])
                 
             logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
             prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))

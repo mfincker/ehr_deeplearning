@@ -36,25 +36,25 @@ class Config:
     """
     def __init__(self, args):
         self.n_features = 1 # 1 code at a time is fed
-        self.max_length = 50 # longest sequence to parse
-        # self.n_classes = 2
-        self.dropout = 0.5 # not used currently
+        self.max_length = args.max_length # longest sequence to parse
         self.embed_type = "one-hot"
-        self.embed_size = 10000
-        self.hidden_size = 100
+        self.dropout = 0.01 # Not used in the model
+        self.embed_size = args.embed_size
+        self.hidden_size = args.hidden_size
         self.batch_size = 16
-        self.n_epochs = 500
+        self.n_epochs = 100
         self.max_grad_norm = 10.
-        self.lr = 0.001
+        self.lr = args.learning_rate
         self.clip_gradients = False
         self.cell = args.cell # rnn / gru / lstm
         self.embed_type = args.embed_type
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
-        self.pos_weight = 1.05
+        self.pos_weight = args.pos_weight
         self.idx_to_remove = args.idx_to_remove
-        self.feature_size = 500
+        self.feature_size = args.feature_size
         self.train_x = args.train_x.name
+        self.adaptive_lr = args.adaptive_lr
 
         if "model_path" in args:
             # Where to save things.
@@ -565,8 +565,14 @@ if __name__ == "__main__":
     command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "gru_tf", "lstm", "multi_gru", "multi_rnn"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
+    command_parser.add_argument('-fs', "--feature_size", type = int, default=500, help = "Size of feature space")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
     command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
+    command_parser.add_argument('-lr', "--learning_rate", type = float, default = 0.001, help = "Learning rate value")
+    command_parser.add_argument('-alr', "--adaptive_lr", type = bool, default = False, help = "Enable adaptive lr")
+    command_parser.add_argument('--hidden_size', type = int, default = 100, help = "RNNcell hidden state size")
+    command_parser.add_argument('--max_length', type = int, default = 50, help = "Max length of code sequence to consider")
+    command_parser.add_argument('--pos_weight', type = float, default = 1, help="Weight for positive examples in the loss")
     command_parser.set_defaults(func=do_train)
 
     command_parser = subparsers.add_parser('evaluate', help='')
