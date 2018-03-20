@@ -1,0 +1,44 @@
+estimator cv:
+{'mean_fit_time': array([ 721.79817986,  877.81873989,  513.05775897,  479.48989089,
+         84.22109723,   65.20982114]), 'std_fit_time': array([  49.66919863,  142.19852915,   69.60808009,   53.75224547,
+         13.05480964,    3.01892318]), 'mean_score_time': array([ 1.38294371,  1.34569097,  0.80767314,  2.44078533,  0.50877905,
+        0.4230752 ]), 'std_score_time': array([  4.20971376e-01,   6.68218045e-01,   9.67377718e-03,
+         3.18795801e-01,   6.91330579e-02,   4.88152982e-04]), 'param_mlp__alpha': masked_array(data = [9.9999999999999995e-07 6.3095734448019293e-05 0.0039810717055349734
+ 0.25118864315095824 15.848931924611142 1000.0],
+             mask = [False False False False False False],
+       fill_value = ?)
+, 'param_mlp__hidden_layer_sizes': masked_array(data = [list([50, 25, 10, 5]) list([50, 25, 10, 5]) list([50, 25, 10, 5])
+ list([50, 25, 10, 5]) list([50, 25, 10, 5]) list([50, 25, 10, 5])],
+             mask = [False False False False False False],
+       fill_value = ?)
+, 'params': [{'mlp__alpha': 9.9999999999999995e-07, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}, {'mlp__alpha': 6.3095734448019293e-05, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}, {'mlp__alpha': 0.0039810717055349734, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}, {'mlp__alpha': 0.25118864315095824, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}, {'mlp__alpha': 15.848931924611142, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}, {'mlp__alpha': 1000.0, 'mlp__hidden_layer_sizes': [50, 25, 10, 5]}], 'split0_test_score': array([ 0.52332668,  0.4833373 ,  0.53537774,  0.47609663,  0.        ,  0.        ]), 'split1_test_score': array([ 0.54065041,  0.54062898,  0.53574363,  0.52540115,  0.        ,  0.        ]), 'split2_test_score': array([ 0.52934974,  0.5271989 ,  0.52603613,  0.50382764,  0.        ,  0.        ]), 'mean_test_score': array([ 0.53110891,  0.51705493,  0.53238584,  0.50177505,  0.        ,  0.        ]), 'std_test_score': array([ 0.00718095,  0.0244644 ,  0.0044924 ,  0.02018076,  0.        ,  0.        ]), 'rank_test_score': array([2, 3, 1, 4, 5, 5], dtype=int32), 'split0_train_score': array([ 0.78040997,  0.73291372,  0.7536841 ,  0.49791071,  0.        ,  0.        ]), 'split1_train_score': array([ 0.79794964,  0.80333078,  0.74437705,  0.54485869,  0.        ,  0.        ]), 'split2_train_score': array([ 0.78155789,  0.81447854,  0.75774873,  0.51448013,  0.        ,  0.        ]), 'mean_train_score': array([ 0.78663916,  0.78357435,  0.75193663,  0.51908318,  0.        ,  0.        ]), 'std_train_score': array([ 0.00801143,  0.03611041,  0.00559707,  0.01944084,  0.        ,  0.        ])}
+
+#########
+# Train #
+#########
+accuracy: 0.933790048073
+confusion matrix:
+[[462259  17376]
+ [ 18103  38118]]
+report:
+             precision    recall  f1-score   support
+
+          0       0.96      0.96      0.96    479635
+          1       0.69      0.68      0.68     56221
+
+avg / total       0.93      0.93      0.93    535856
+
+
+########
+# Test #
+########
+accuracy: 0.910159805428
+confusion matrix:
+[[57056  2926]
+ [ 3095  3942]]report:
+             precision    recall  f1-score   support
+
+          0       0.95      0.95      0.95     59982
+          1       0.57      0.56      0.57      7037
+
+avg / total       0.91      0.91      0.91     67019
