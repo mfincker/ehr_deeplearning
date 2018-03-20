@@ -35,14 +35,14 @@ class Config:
     """
     def __init__(self, args):
         self.n_features = 1 # 1 code at a time is fed
-        self.max_length = 60 # longest sequence to parse
+        self.max_length = 600 # longest sequence to parse
         # self.n_classes = 2
         self.dropout = 0.5 # not used currently
         self.embed_type = "one-hot"
         self.embed_size = 10000
-        self.hidden_size = 10
+        self.hidden_size = 50
         self.batch_size = 64
-        self.n_epochs = 5
+        self.n_epochs = 1
         self.max_grad_norm = 10.
         self.lr = 0.001
         self.clip_gradients = False
@@ -50,7 +50,7 @@ class Config:
         self.embed_type = args.embed_type
         self.embed_size = args.embed_size
         self.clip_gradients = args.clip_gradients
-        self.pos_weight = 1
+        self.pos_weight = 2
         self.idx_to_remove = args.idx_to_remove
 
         if "model_path" in args:
@@ -211,6 +211,9 @@ class RNNModel(DLModel):
             cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
         elif self.config.cell == "lstm":
             cell = tf.nn.rnn_cell.LSTMCell(self.config.hidden_size)
+        elif self.config.cell == "multi_gru":
+            rnn_layers = [tf.nn.rnn_cell.GRUCell(size) for size in [300, 150, self.config.hidden_size]]
+            cell = tf.nn.rnn_cell.MultiRNNCell(rnn_layers)
         else:
             raise ValueError("Unsupported cell type.")
 
@@ -365,15 +368,14 @@ def do_test2(args):
     logger.info("Model did not crash!")
     logger.info("Passed!")
 
-def load_and_preprocess_data(args):
+def load_and_preprocess_data(args, train = True, dev = True, test = True):
 
     def remove_ukn_zero_most_common(xStream, yStream, idxToRemoveStream):
         x = pickle.load(xStream)
         y = pickle.load(yStream)
-        idx_to_remove = pickle.load(idxToRemoveStream)
-        idx_to_remove.add(0)
+        idx_to_remove = 40
 
-        x_ = [[c for c in seq if (c not in idx_to_remove)] for seq in x]
+        x_ = [[c for c in seq if (c > idx_to_remove)] for seq in x]
         zero_code = [i for i, c in enumerate(x_) if len(c) == 0]
         x_ = [c for i, c in enumerate(x_) if i not in zero_code]
         y_ = [l for i, l in enumerate(y) if i not in zero_code]
@@ -393,19 +395,28 @@ def load_and_preprocess_data(args):
 
         return x_sampled, y_sampled, max_length
 
-    logger.info("Loading training data...")
-    train_x, train_y, max_length_train = remove_ukn_zero(args.train_x, args.train_y)
-    logger.info("Done. Read %d sentences", len(train_y))
+    lengths = []
+    train_x, train_y, dev_x, dev_y, test_x, test_y = [None] * 6
 
-    logger.info("Loading dev data...")
-    dev_x, dev_y, max_length_dev = remove_ukn_zero(args.dev_x, args.dev_y)
-    logger.info("Done. Read %d sentences", len(dev_y))
+    if train:
+        logger.info("Loading training data...")
+        train_x, train_y, max_length_train = remove_ukn_zero_most_common(args.train_x, args.train_y, args.idx_to_remove)
+        logger.info("Done. Read %d sentences", len(train_y))
+        lengths.append(max_length_train)
 
-    logger.info("Loading test data...")
-    test_x, test_y, max_length_test = remove_ukn_zero(args.test_x, args.test_y)
-    logger.info("Done. Read %d sentences", len(test_y))
+    if dev:
+        logger.info("Loading dev data...")
+        dev_x, dev_y, max_length_dev = remove_ukn_zero_most_common(args.dev_x, args.dev_y, args.idx_to_remove)
+        logger.info("Done. Read %d sentences", len(dev_y))
+        lengths.append(max_length_dev)
 
-    max_length = max(max_length_train, max_length_dev, max_length_test)
+    if test:
+        logger.info("Loading test data...")
+        test_x, test_y, max_length_test = remove_ukn_zero_most_common(args.test_x, args.test_y, args.idx_to_remove)
+        logger.info("Done. Read %d sentences", len(test_y))
+        lengths.append(max_length_test)
+
+    max_length = max(lengths)
     
     return train_x, train_y, dev_x, dev_y, test_x, test_y, max_length
 
@@ -457,29 +468,38 @@ def do_train(args):
                         for l in batch_loss:
                             f.write(str(i) + "\t" + str(l) + "\n")
 
-# def do_evaluate(args):
-#     config = Config(args)
-#     helper = ModelHelper.load(args.model_path)
-#     input_data = read_conll(args.data)
-#     embeddings = load_embeddings(args, helper)
-#     config.embed_size = embeddings.shape[1]
+def do_evaluate(args):
+    config = Config(args)
+    _, _, dev_x, dev_y, _, _, max_length = load_and_preprocess_data(args, train = False, test = False)
+    config.max_length = min(max_length, config.max_length)
 
-#     with tf.Graph().as_default():
-#         logger.info("Building model...",)
-#         start = time.time()
-#         model = RNNModel(helper, config, embeddings)
+    if config.embed_type != "one-hot":
+        embeddings = load_embeddings(args, helper)
+        config.embed_size = embeddings.shape[1]
+    else:
+        embeddings = None
+        config.embed_size = args.embed_size
 
-#         logger.info("took %.2f seconds", time.time() - start)
+    with tf.Graph().as_default():
+        logger.info("Building model...",)
+        start = time.time()
+        model = RNNModel(config, embeddings)
 
-#         init = tf.global_variables_initializer()
-#         saver = tf.train.Saver()
+        logger.info("took %.2f seconds", time.time() - start)
 
-#         with tf.Session() as session:
-#             session.run(init)
-#             saver.restore(session, model.config.model_output)
-#             for sentence, labels, predictions in model.output(session, input_data):
-#                 predictions = [LBLS[l] for l in predictions]
-#                 print_sentence(args.output, sentence, labels, predictions)
+        init = tf.global_variables_initializer()
+        saver = tf.train.Saver()
+
+        with tf.Session() as session:
+            session.run(init)
+            saver.restore(session, model.config.model_output)
+            print "label\tpred"
+            labels, preds = model.output(session, dev_x, dev_y)
+            print len(labels)
+            print len(preds)
+            for l, p in zip(labels, preds):
+                print str(l) + "\t" + str(p)
+            
 
 
 if __name__ == "__main__":
@@ -517,21 +537,31 @@ if __name__ == "__main__":
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm"], default="rnn", help="Type of RNN cell to use.")
+    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
     command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
     command_parser.set_defaults(func=do_train)
 
-    # command_parser = subparsers.add_parser('evaluate', help='')
-    # command_parser.add_argument('-d', '--data', type=argparse.FileType('r'), default="data/dev.conll", help="Training data")
-    # command_parser.add_argument('-m', '--model-path', help="Training data")
+    command_parser = subparsers.add_parser('evaluate', help='')
+    command_parser.add_argument('-tx','--train_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.train_x.pyc", help="Training data x")
+    command_parser.add_argument('-ty','--train_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.train_y.pyc", help="Training data y")
+    command_parser.add_argument('-dx','--dev_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.dev_x.pyc", help="Dev data x")
+    command_parser.add_argument('-dy','--dev_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.dev_y.pyc", help="Dev data y")
+    command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
+    command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
+    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
+    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru"], default="rnn", help="Type of RNN cell to use.")
+    command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
+    command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
+    command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
+    command_parser.add_argument('model_path', help="Training data")
     # command_parser.add_argument('-v', '--vocab', type=argparse.FileType('r'), default="data/vocab.txt", help="Path to vocabulary file")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    # command_parser.add_argument('-c', '--cell', choices=["rnn", "gru"], default="rnn", help="Type of RNN cell to use.")
-    # command_parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout, help="Training data")
-    # command_parser.set_defaults(func=do_evaluate)
+    command_parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout, help="Training data")
+    command_parser.set_defaults(func=do_evaluate)
 
 
     ARGS = parser.parse_args()
