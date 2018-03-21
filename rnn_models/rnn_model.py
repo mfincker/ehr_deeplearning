@@ -60,7 +60,7 @@ class DLModel(object):
         accuracy = sum([l == p for l, p in zip(labels, preds)]) / len(labels)
         precision = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(preds)
         recall = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(labels)
-        f1 = 2 / (1/precision + 1/recall)
+        f1 = 2 / ((1/precision) + (1/recall))
 
         return (accuracy, precision, recall, f1)
 
@@ -97,9 +97,17 @@ class DLModel(object):
         
         dev_data = self.preprocess_sequence_data(dev_x)
         dev_data = [(t[0], t[1], l) for t, l in zip(dev_data, dev_y)]
+        # logger.info(dev_data)
 
         epoch_losses = []
         for epoch in range(self.config.n_epochs):
+            if self.config.adaptive_lr:
+                pass
+                # if epoch == 10:
+                    # prev_lr = self.config.lr
+                    # self.config.lr = 0.0001
+                    # logger.info("Updating lr from %f to %f", [prev_lr, self.config.lr])
+                
             logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
             prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
 			
@@ -112,9 +120,10 @@ class DLModel(object):
 
             epoch_losses.append(batch_losses)
 
-            # logger.info("Evaluating on training data")
-            # entity_scores = self.evaluate(session, train_x, train_y)
-            # logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
+            if epoch % 10 == 0:
+                logger.info("Evaluating on training data")
+                entity_scores = self.evaluate(session, train_x, train_y)
+                logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
             logger.info("Evaluating on development data")
             entity_scores = self.evaluate(session, dev_x, dev_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
