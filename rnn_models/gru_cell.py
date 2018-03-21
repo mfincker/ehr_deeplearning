@@ -1,7 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Q3(d): Grooving with GRUs
+Self implemented GRUcell
+Initialize weights with Xavier
+Code adapted from CS224N
 """
 
 from __future__ import absolute_import
@@ -14,13 +16,17 @@ import sys
 import tensorflow as tf
 import numpy as np
 
-logger = logging.getLogger("hw3.q3.1")
+logger = logging.getLogger("GRUCell")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 class GRUCell(tf.nn.rnn_cell.RNNCell):
-    """Wrapper around our GRU cell implementation that allows us to play
-    nicely with TensorFlow.
+    """
+    GRU cell class for Tensorflow
+
+    Initialize weights with Xavier's initialization
+    Initialize biases to 0
+    Initial hidden state to 0
     """
     def __init__(self, input_size, state_size):
         self.input_size = input_size
@@ -35,23 +41,9 @@ class GRUCell(tf.nn.rnn_cell.RNNCell):
         return self._state_size
 
     def __call__(self, inputs, state, scope=None):
-        """Updates the state using the previous @state and @inputs.
-        Remember the GRU equations are:
+        """
+        Updates the state using the previous @state and @inputs.
 
-        z_t = sigmoid(x_t W_z + h_{t-1} U_z + b_z)
-        r_t = sigmoid(x_t W_r + h_{t-1} U_r + b_r)
-        o_t = tanh(x_t W_o + r_t * h_{t-1} U_o + b_o)
-        h_t = z_t * h_{t-1} + (1 - z_t) * o_t
-
-        TODO: In the code below, implement an GRU cell using @inputs
-        (x_t above) and the state (h_{t-1} above).
-            - Define U_r, W_r, b_r, U_z, W_z, b_z and U_o, W_o, b_o to
-              be variables of the apporiate shape using the
-              `tf.get_variable' functions.
-            - Compute z, r, o and @new_state (h_t) defined above
-        Tips:
-            - Remember to initialize your matrices using the xavier
-              initialization as before.
         Args:
             inputs: is the input vector of size [None, self.input_size]
             state: is the previous state vector of size [None, self.state_size]
@@ -61,10 +53,7 @@ class GRUCell(tf.nn.rnn_cell.RNNCell):
         """
         scope = scope or type(self).__name__
 
-        # It's always a good idea to scope variables in functions lest they
-        # be defined elsewhere!
         with tf.variable_scope(scope):
-            ### YOUR CODE HERE (~20-30 lines)
             # Variable intialization
             ## Reset gate
             W_r = tf.get_variable(name = "W_r", shape = [self.input_size, self.state_size], initializer = tf.contrib.layers.xavier_initializer())
@@ -93,10 +82,7 @@ class GRUCell(tf.nn.rnn_cell.RNNCell):
             o_t = tf.tanh(o_t)
             ## New state
             new_state = tf.add(tf.multiply(z_t, state), tf.multiply(tf.subtract(1., z_t), o_t))
-            ### END YOUR CODE ###
-        # For a GRU, the output and state are the same (N.B. this isn't true
-        # for an LSTM, though we aren't using one of those in our
-        # assignment)
+
         output = new_state
         return output, new_state
 
