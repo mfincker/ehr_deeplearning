@@ -1,14 +1,19 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+'''
+Code from CS 224N homework
+
+- Progress bar class
+- Minibatch creation
+'''
 
 from __future__ import division
 
 import sys
 import time
 import logging
-# from collections import defaultdict, Counter, OrderedDict
 import numpy as np
-# from numpy import array, zeros, allclose
+
 
 logger = logging.getLogger("hw3")
 logger.setLevel(logging.DEBUG)

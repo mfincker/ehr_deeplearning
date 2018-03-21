@@ -14,18 +14,21 @@ import time
 import os
 from datetime import datetime
 import cPickle as pickle
-from random import random
+from random import random, seed
 
 import tensorflow as tf
 import numpy as np
 
-from rnn_model import DLModel
-from gru_cell import GRUCell
+from rnn_model import RNNModel
 
 
 logger = logging.getLogger("RNN")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
+#################
+# Config object #
+#################
 
 class Config:
     """Holds model hyperparams and data information.
@@ -38,7 +41,6 @@ class Config:
         self.n_features = 1 # 1 code at a time is fed
         self.max_length = args.max_length # longest sequence to parse
         self.embed_type = "one-hot"
-        self.dropout = 0.01 # Not used in the model
         self.embed_size = args.embed_size
         self.hidden_size = args.hidden_size
         self.batch_size = 16
@@ -69,296 +71,102 @@ class Config:
         self.loss_output = self.output_path + "losses.tsv"
         self.log_output = self.output_path + "log"
 
-def pad_sequences(data, max_length):
-    """Ensures each input seqeunce in @data is of length
-    @max_length by padding it with zeros and truncating the rest of the
-    sequence.
+####################
+# Helper functions #
+####################
 
-    For every code sequence in @data,
-    (a) create a new sequence which appends zeros  until
-    the sequence is of length @max_length. If the sequence is longer
-    than @max_length, simply truncate the sequence to be @max_length
-    long from the end.
-    (b) create a _hidden_masking_ sequence that has a True wherever there was a
-    token in the original sequence, and a False for every padded input.
-    (c) create a scalar representing the index of the last code in the originial code sequence
-
-    Example: for the sequence : [4, 6, 7], and max_length = 5, we would construct
-        - a new sentence: [4, 6, 7, 0, 0]
-        - a masking seqeunce: [True, True, True, False, False]
-        - a index: 2
+def load_and_preprocess_data(args, train = True, dev = True, test = True):
+    '''
+    Load and preprocess the data from files to meeth the RNN requirement.
+    The data is filtered to remove the most common codes (@args.idx_to_remove)
+    and in case of train set, sampled down to only keep 20% of the negative 
+    examples (to make training faster / easier)
 
     Args:
-        data: is a list of code sequences . @code sequence is a list
-            containing the code indeces in the sequence. 
-        max_length: the desired length for all input/output sequences.
+        @args: object - command parser arguments. Can contain:
+                - args.train_x: file handler for pickeld train data
+                - args.train_y:file handler for pickeld train label
+                - args.dev_x: file handler for pickeld dev data
+                - args.dev_y:file handler for pickeld dev label
+                - args.test_x: file handler for pickeld test data
+                - args.test_y:file handler for pickeld test label
+                - args.idx_to_remove: largest index of the most common code to remove from the dataset
+        @train: bool - if True, expects train data/labels and process them
+        @dev: bool - if True, expects dev data/labels and process them
+        @test: bool - if True, expects test data/labels and process them
+
     Returns:
-        a new list of data points of the structure (code sequence', mask, index).
-        Each of code sequence' and mask are of length @max_length. Index is a scalar.
-        See the example above for more details.
-    """
-    ret = []
+        Train and/or Dev and/or Test datasets, cleaned and sampled down. 
+        Also returns the lenght of the longest code sequence in the dataset.
+    '''
+    def remove_ukn_zero_most_common(xStream, yStream, idx_to_remove, trainSet):
+        x = pickle.load(xStream)
+        y = pickle.load(yStream)
 
-    # Use this zero vector when padding sequences.
-    zero_vector = 0 # correspond to UKN code
+        x_ = [[c for c in seq if (c > idx_to_remove)] for seq in x]
+        zero_code = [i for i, c in enumerate(x_) if len(c) == 0]
+        x_ = [c for i, c in enumerate(x_) if i not in zero_code]
+        y_ = [l for i, l in enumerate(y) if i not in zero_code]
 
-    for sequence in data:
-        ### YOUR CODE HERE (~4-6 lines)
-        n = len(sequence)
-        if n >= max_length:
-            ret.append((sequence[n - max_length: n], max_length - 1))
-
-        else:
-            sequence = sequence + [zero_vector] * (max_length - n)
-            ret.append((sequence, n-1))
-
-        ### END YOUR CODE ###
-    return ret
-
-class RNNModel(DLModel):
-    """
-    Implements a recursive neural network with an embedding layer and
-    single hidden layer.
-    This network will predict a sequence of labels (e.g. PER) for a
-    given token (e.g. Henry) using a featurized window around the token.
-    """
-
-    def add_placeholders(self):
-        """Generates placeholder variables to represent the input tensors
-
-        These placeholders are used as inputs by the rest of the model building and will be fed
-        data during training.  Note that when "None" is in a placeholder's shape, it's flexible
-        (so we can use different batch sizes without rebuilding the model).
-
-        Adds following nodes to the computational graph
-
-        input_placeholder: Input placeholder tensor of  shape (None, self.max_length), type tf.int32
-        labels_placeholder: Labels placeholder tensor of shape (None, 1), type tf.int32
-        mask_placeholder:  Mask placeholder tensor of shape (None, self.max_length), type tf.bool
-        dropout_placeholder: Dropout value placeholder (scalar), type tf.float32
-        """
-
-        self.input_placeholder = tf.placeholder(tf.int32, shape = (None, self.config.max_length), name = "input_placeholder")
-        self.labels_placeholder = tf.placeholder(tf.int32, shape = (None), name = "labels_placeholder")
-        self.dropout_placeholder = tf.placeholder(tf.float32, name = "dropout_placeholder")
-        self.index_placeholder = tf.placeholder(tf.int32, shape = (None), name = "index_placeholder")
-
-    def create_feed_dict(self, inputs_batch, index_batch, labels_batch=None, dropout=1):
-        """Creates the feed_dict for the dependency parser.
-
-        A feed_dict takes the form of:
-
-        feed_dict = {
-                <placeholder>: <tensor of values to be passed for placeholder>,
-                ....
-        }
-
-        Args:
-            inputs_batch: A batch of input data.
-            mask_batch:   A batch of mask data.
-            labels_batch: A batch of label data.
-            dropout: The dropout rate.
-        Returns:
-            feed_dict: The feed dictionary mapping from placeholders to values.
-        """
-
-        feed_dict = {   self.input_placeholder: inputs_batch,
-                        self.dropout_placeholder: dropout,
-                        self.index_placeholder: index_batch }
-
-        if labels_batch is not None:
-            feed_dict[self.labels_placeholder] = labels_batch
-
-        return feed_dict
-
-    def add_embedding(self):
-        """Adds an embedding layer that maps from input tokens (integers) to vectors and then
-        concatenates those vectors:
-
-        - if embed_type = "one-hot": embed the codes as one-hot vectors
-        - if embed_type = "pretrained": embed the codes as trainable pretrained embeding vectors
-
-        Returns:
-            embeddings: tf.Tensor of shape (None, max_length, embed_size)
-        """
-
-        if self.config.embed_type == "one-hot":
-            embeddings = tf.cast(tf.one_hot(
-                                    self.input_placeholder,
-                                    self.config.embed_size,
-                                    on_value=1,
-                                    off_value=0,
-                                    axis=-1,
-                                    # dtype=tf.int32,
-                                    name="one_hot_embedded_input",
-                                ), tf.float32)
-        else:
-            embeddings = tf.Variable(self.pretrained_embeddings, dtype = tf.float32, name = "vocabulary", trainable=True)
-            embeddings = tf.nn.embedding_lookup(params = embeddings, ids = self.input_placeholder)
-            embeddings = tf.reshape(tensor = embeddings, shape = [-1, self.config.max_length, self.config.n_features * self.config.embed_size])                                                  
-                   
-        return embeddings
-
-    def add_prediction_op(self):
-        """
-
-        Returns:
-            pred: tf.Tensor of shape (batch_size, 1)
-        """
+        x_sampled = []
+        y_sampled = []
+        for c, l in zip(x_, y_):
+            if trainSet: # Remove 80% of the examples
+                if random() < 0.8:
+                    continue
+                else:
+                    x_sampled.append(c)
+                    y_sampled.append(l)
+            else: # Keep everything
+                x_sampled = x_
+                y_sampled = y_
 
 
+        max_length = max([len(v) for v in x_sampled])
+        assert len(x_sampled) == len(y_sampled), "train x and y don't have the same length."
 
-        if self.config.cell == "rnn":
-            cell = tf.contrib.rnn.BasicRNNCell(self.config.hidden_size)
-        elif self.config.cell == "gru_tf":
-            cell = tf.contrib.rnn.GRUCell(self.config.hidden_size)
-        elif self.config.cell == "gru":
-            cell = GRUCell(self.config.feature_size, self.config.hidden_size)
-        elif self.config.cell == "lstm":
-            cell = tf.contrib.rnn.LSTMCell(self.config.hidden_size)
-        elif self.config.cell == "multi_gru":
-            rnn_layers = [tf.contrib.rnn.GRUCell(size) for size in [300, 150, self.config.hidden_size]]
-            cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
-        elif self.config.cell == "multi_rnn":
-            rnn_layers = [tf.contrib.rnn.BasicRNNCell(size) for size in [300, 150, self.config.hidden_size]]
-            cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
-        else:
-            raise ValueError("Unsupported cell type.")
+        return x_sampled, y_sampled, max_length
 
-        x = self.add_embedding()
+    lengths = []
+    train_x, train_y, dev_x, dev_y, test_x, test_y = [None] * 6
 
-        batch_size = tf.shape(x)[0]
-        x = tf.reshape(x, [batch_size * self.config.max_length, self.config.embed_size])
-        U0 = tf.get_variable(name = "U0", shape = [self.config.embed_size, self.config.feature_size], initializer = tf.contrib.layers.xavier_initializer())
-        b0 = tf.get_variable(name = "b0", shape = [self.config.feature_size])
-        x = tf.tanh(tf.matmul(x, U0) + b0)
-        x = tf.reshape(x, shape = [batch_size, self.config.max_length, self.config.feature_size])
+    if train:
+        logger.info("Loading training data...")
+        train_x, train_y, max_length_train = remove_ukn_zero_most_common(args.train_x, args.train_y, args.idx_to_remove, True)
+        logger.info("Done. Read %d sentences", len(train_y))
+        lengths.append(max_length_train)
 
+    if dev:
+        logger.info("Loading dev data...")
+        dev_x, dev_y, max_length_dev = remove_ukn_zero_most_common(args.dev_x, args.dev_y, args.idx_to_remove, False)
+        logger.info("Done. Read %d sentences", len(dev_y))
+        lengths.append(max_length_dev)
 
-        preds, _ = tf.nn.dynamic_rnn(cell, x, dtype = tf.float32) # size (batch_size, time_step, hidden_size)
+    if test:
+        logger.info("Loading test data...")
+        test_x, test_y, max_length_test = remove_ukn_zero_most_common(args.test_x, args.test_y, args.idx_to_remove, False)
+        logger.info("Done. Read %d sentences", len(test_y))
+        lengths.append(max_length_test)
 
-        # Only keep last state that corresponds to a real code - using index_placeholder
-        batch_size = tf.shape(preds)[0]
-        max_length = tf.shape(preds)[1]
-        state_size = int(preds.get_shape()[2])
-        idx = tf.range(0, batch_size) * max_length + (self.index_placeholder)
-        preds = tf.reshape(preds, [-1, state_size]) # reshape to (batch_size * time_step, hidden_size)
-        preds = tf.gather(preds, idx) # shape (batch_size, hidden_size)
+    max_length = max(lengths)
+    
+    return train_x, train_y, dev_x, dev_y, test_x, test_y, max_length
 
-        # Prediction layer
-        U = tf.get_variable(name = "U", shape = [self.config.hidden_size, 1], initializer = tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable(name = "b", shape = [1])
+def load_embeddings(args):
+    raise NotImplementedError("Implement when I get embeddings")
 
-        preds = tf.add(tf.matmul(preds, U), b)
+##########################
+# Command line functions #
+##########################
 
-        return preds
-
-    def add_loss_op(self, preds):
-        """Adds Ops for the loss function to the computational graph.
-
-        Args:
-            pred: A tensor of shape (batch_size, 1) containing the output of the neural
-                  network before the sigmoid.
-
-        Returns:
-            loss: A 0-d tensor (scalar)
-        """
-        loss = tf.nn.weighted_cross_entropy_with_logits(targets = tf.cast(self.labels_placeholder, tf.float32),
-                                                        logits = preds,
-                                                        pos_weight = self.config.pos_weight)
-        loss = tf.reduce_mean(loss) 
-        return loss
-
-    def add_training_op(self, loss):
-        """Sets up the training Ops.
-
-        Creates an optimizer and applies the gradients to all trainable variables.
-        The Op returned by this function is what must be passed to the
-        `sess.run()` call to cause the model to train. 
-        Also implement gradient clipping.
-
-
-        Args:
-            loss: Loss tensor, from sigmoid_loss.
-        Returns:
-            train_op: The Op for training.
-        """
-
-        # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.config.lr)
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.config.lr)
-
-        gradients = optimizer.compute_gradients(loss)
-        gradients, variables = zip(*gradients)
-
-        if self.config.clip_gradients:
-            gradients, _ = tf.clip_by_global_norm(gradients, self.config.max_grad_norm)
-        
-        # self.grad_norm = tf.global_norm(gradients)
-        gradients = zip(gradients, variables)            
-        
-        train_op = optimizer.apply_gradients(gradients)
-
-        return train_op
-
-    def preprocess_sequence_data(self, examples):
-        return pad_sequences(examples, self.config.max_length)
-
-    def build(self):
-        self.add_placeholders()
-        self.pred = self.add_prediction_op()
-        self.loss = self.add_loss_op(self.pred)
-        self.train_op = self.add_training_op(self.loss)
-
-    def predict_on_batch(self, sess, inputs_batch, index_batch):
-        feed = self.create_feed_dict(inputs_batch=inputs_batch, index_batch=index_batch)
-        predictions = sess.run(tf.cast(tf.reshape(self.pred, [-1]) > 0, tf.int32 ), feed_dict=feed)
-        return predictions
-
-    def train_on_batch(self, sess, inputs_batch, index_batch, labels_batch):
-        feed = self.create_feed_dict(inputs_batch, labels_batch=labels_batch, index_batch=index_batch,
-                                     dropout=self.config.dropout)
-        loss, _ = sess.run([self.loss, self.train_op], feed_dict=feed)
-        return loss
-
-    def __init__(self, config, pretrained_embeddings = None, report=None):
-        super(RNNModel, self).__init__(config, report)
-        self.pretrained_embeddings = pretrained_embeddings
-
-        # Defining placeholders.
-        self.input_placeholder = None
-        self.labels_placeholder = None
-        self.index_placeholder = None
-        self.dropout_placeholder = None
-
-        self.build()
-
-def test_pad_sequences():
-    Config.n_features = 2
-    data = [
-            [4, 1, 6, 8, 7, 9],
-            [3, 0, 3],
-        ]
-    ret = [
-        ([1, 6, 8, 7, 9], 4),
-        ([3, 0, 3, 0, 0], 2)
-        ]
-
-    ret_ = pad_sequences(data, 5)
-    assert len(ret_) == 2, "Did not process all examples: expected {} results, but got {}.".format(2, len(ret_))
-    for i in range(2):
-        assert len(ret_[i]) == 2, "Did not populate return values corrected: expected {} items, but got {}.".format(3, len(ret_[i]))
-        for j in range(2):
-            assert ret_[i][j] == ret[i][j], "Expected {}, but got {} for {}-th entry of {}-th example".format(ret[i][j], ret_[i][j], j, i)
-
-def do_test1(_):
-    logger.info("Testing pad_sequences")
-    test_pad_sequences()
-    logger.info("Passed!")
-
-def do_test2(args):
+def do_test_model_build(args):
+    '''
+    Load simple data and build an RNN model on it.
+    Use to debug RNNModel.
+    '''
     logger.info("Testing implementation of RNNModel")
     config = Config(args) # TODO double check which params are set / need to be set
-    train_x, train_y, dev_x, dev_y, test_x, test_y, max_length = load_and_preprocess_data(args)
+    train_x, train_y, dev_x, dev_y, _, _, max_length = load_and_preprocess_data(args, test = False)
     config.max_length = min(max_length, config.max_length)
 
     if config.embed_type != "one-hot":
@@ -384,68 +192,15 @@ def do_test2(args):
     logger.info("Model did not crash!")
     logger.info("Passed!")
 
-def load_and_preprocess_data(args, train = True, dev = True, test = True):
-
-    def remove_ukn_zero_most_common(xStream, yStream, idx_to_remove):
-        x = pickle.load(xStream)
-        y = pickle.load(yStream)
-        idx_to_remove = 40
-
-        x_ = [[c for c in seq if (c > idx_to_remove)] for seq in x]
-        zero_code = [i for i, c in enumerate(x_) if len(c) == 0]
-        x_ = [c for i, c in enumerate(x_) if i not in zero_code]
-        y_ = [l for i, l in enumerate(y) if i not in zero_code]
-
-        # Remove 80% of the negative examples
-        x_sampled = []
-        y_sampled = []
-        for c, l in zip(x_, y_):
-            if l == 0 and random() < 0.8:
-                continue
-            else:
-                x_sampled.append(c)
-                y_sampled.append(l)
-
-        max_length = max([len(v) for v in x_sampled])
-        assert len(x_sampled) == len(y_sampled), "train x and y don't have the same length."
-
-        return x_sampled, y_sampled, max_length
-
-    lengths = []
-    train_x, train_y, dev_x, dev_y, test_x, test_y = [None] * 6
-
-    if train:
-        logger.info("Loading training data...")
-        train_x, train_y, max_length_train = remove_ukn_zero_most_common(args.train_x, args.train_y, args.idx_to_remove)
-        logger.info("Done. Read %d sentences", len(train_y))
-        lengths.append(max_length_train)
-
-    if dev:
-        logger.info("Loading dev data...")
-        dev_x, dev_y, max_length_dev = remove_ukn_zero_most_common(args.dev_x, args.dev_y, args.idx_to_remove)
-        logger.info("Done. Read %d sentences", len(dev_y))
-        lengths.append(max_length_dev)
-
-    if test:
-        logger.info("Loading test data...")
-        test_x, test_y, max_length_test = remove_ukn_zero_most_common(args.test_x, args.test_y, args.idx_to_remove)
-        logger.info("Done. Read %d sentences", len(test_y))
-        lengths.append(max_length_test)
-
-    max_length = max(lengths)
-    
-    return train_x, train_y, dev_x, dev_y, test_x, test_y, max_length
-
-def load_embeddings(args):
-    raise NotImplementedError("Implement when I get embeddings from Sara")
 
 def do_train(args):
     # Set up some parameters.
     config = Config(args)
-    train_x, train_y, dev_x, dev_y, test_x, test_y, max_length = load_and_preprocess_data(args, test = False)
+    train_x, train_y, dev_x, dev_y, _, _, max_length = load_and_preprocess_data(args, test = False)
     
-    keep_train = 2000
-    keep_dev = 200
+    # Downsample the dataset - too long to train on full data
+    keep_train = 5000
+    keep_dev = 500
     logger.info("keeping only %d train examples and %d dev examples" % (2000, 200))
     train_x = train_x[:keep_train]
     train_y = train_y[:keep_train]
@@ -494,8 +249,9 @@ def do_train(args):
                             f.write(str(i) + "\t" + str(l) + "\n")
 
 def do_evaluate(args):
+    seed(41)
     config = Config(args)
-    _, _, dev_x, dev_y, _, _, max_length = load_and_preprocess_data(args, train = False, test = False)
+    _, _, _, _, test_x, test_y, max_length = load_and_preprocess_data(args, train = False, dev = False)
     config.max_length = min(max_length, config.max_length)
 
     if config.embed_type != "one-hot":
@@ -518,12 +274,10 @@ def do_evaluate(args):
         with tf.Session() as session:
             session.run(init)
             saver.restore(session, model.config.model_output)
-            print "label\tpred"
-            labels, preds = model.output(session, dev_x, dev_y)
-            print len(labels)
-            print len(preds)
-            for l, p in zip(labels, preds):
-                print str(l) + "\t" + str(p)
+
+            entity_scores = model.evaluate(session, test_x, test_y)
+            logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
+            
             
 
 
@@ -531,22 +285,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Trains and tests an NER model')
     subparsers = parser.add_subparsers()
 
-    command_parser = subparsers.add_parser('test1', help='')
-    command_parser.set_defaults(func=do_test1)
-
-    command_parser = subparsers.add_parser('test2', help='')
+    command_parser = subparsers.add_parser('test_build', help='')
     command_parser.add_argument('-tx','--train_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Training data x")
     command_parser.add_argument('-ty','--train_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Training data y")
     command_parser.add_argument('-dx','--dev_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Dev data x")
     command_parser.add_argument('-dy','--dev_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Dev data y")
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.dev_y.pyc", help="Test data y")
-    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
+    # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file") # add when I have embeddings
     command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm"], default="rnn", help="Type of RNN cell to use.")
     command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
-    command_parser.set_defaults(func=do_test2)
+    command_parser.add_argument('--max_length', type = int, default = 50, help = "Max length of code sequence to consider")
+    command_parser.add_argument('--hidden_size', type = int, default = 100, help = "RNNcell hidden state size")
+    command_parser.add_argument('-lr', "--learning_rate", type = float, default = 0.001, help = "Learning rate value")
+    command_parser.add_argument('--pos_weight', type = float, default = 1, help="Weight for positive examples in the loss")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = int, default=40, help="Index of the last most common code to remove")
+    command_parser.add_argument('-fs', "--feature_size", type = int, default=500, help = "Size of feature space")
+    command_parser.add_argument('-alr', "--adaptive_lr", type = bool, default = False, help = "Enable adaptive lr")
+    command_parser.set_defaults(func=do_test_model_build)
 
     command_parser = subparsers.add_parser('train', help='')
     command_parser.add_argument('-tx','--train_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180daysdev_x.train_x.pyc", help="Training data x")
@@ -567,7 +325,7 @@ if __name__ == "__main__":
     command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
     command_parser.add_argument('-fs', "--feature_size", type = int, default=500, help = "Size of feature space")
     command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
-    command_parser.add_argument('-idx', "--idx_to_remove", type = argparse.FileType('rb'), default="../dataset/idx_most_common_40.pyc", help="list of indices to remove from the dataset")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = int, default=40, help="Index of the last most common code to remove")
     command_parser.add_argument('-lr', "--learning_rate", type = float, default = 0.001, help = "Learning rate value")
     command_parser.add_argument('-alr', "--adaptive_lr", type = bool, default = False, help = "Enable adaptive lr")
     command_parser.add_argument('--hidden_size', type = int, default = 100, help = "RNNcell hidden state size")
@@ -583,15 +341,21 @@ if __name__ == "__main__":
     command_parser.add_argument('-sx','--test_x', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_x.pyc", help="Test data x")
     command_parser.add_argument('-sy','--test_y', type=argparse.FileType('r'), default="../dataset/full_data10000_indexes_180days.test_y.pyc", help="Test data y")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
-    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "lstm", "multi_gru", "multi_rnn"], default="rnn", help="Type of RNN cell to use.")
-    command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
-    command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
-    command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
-    command_parser.add_argument('-idx', "--idx_to_remove", type = int, default=40, help="indice of the last too common code to remove")
     command_parser.add_argument('model_path', help="Training data")
     # command_parser.add_argument('-v', '--vocab', type=argparse.FileType('r'), default="data/vocab.txt", help="Path to vocabulary file")
     # command_parser.add_argument('-vv', '--vectors', type=argparse.FileType('r'), default="data/wordVectors.txt", help="Path to word vectors file")
     command_parser.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout, help="Training data")
+    command_parser.add_argument('-c', '--cell', choices=["rnn", "gru", "gru_tf", "lstm", "multi_gru", "multi_rnn"], default="rnn", help="Type of RNN cell to use.")
+    command_parser.add_argument('-et', '--embed_type', choices=["one-hot", "embed"], default="one-hot", help="type of embeddings")
+    command_parser.add_argument('-es', "--embed_size", type = int, default=10000, help="Size of embeddings")
+    command_parser.add_argument('-fs', "--feature_size", type = int, default=500, help = "Size of feature space")
+    command_parser.add_argument('-cg', "--clip_gradients", type = bool, default=False, help="Enable gradient clipping")
+    command_parser.add_argument('-idx', "--idx_to_remove", type = int, default=40, help="Index of the last most common code to remove")
+    command_parser.add_argument('-lr', "--learning_rate", type = float, default = 0.001, help = "Learning rate value")
+    command_parser.add_argument('-alr', "--adaptive_lr", type = bool, default = False, help = "Enable adaptive lr")
+    command_parser.add_argument('--hidden_size', type = int, default = 100, help = "RNNcell hidden state size")
+    command_parser.add_argument('--max_length', type = int, default = 50, help = "Max length of code sequence to consider")
+    command_parser.add_argument('--pos_weight', type = float, default = 1, help="Weight for positive examples in the loss")
     command_parser.set_defaults(func=do_evaluate)
 
 
