@@ -1,4 +1,4 @@
-# 2018-02-22
+# 2018-03-20
 # mfincker
 # Baseline for EHR project:
 #	- split into train : test set (80:20)
@@ -24,31 +24,38 @@ from sklearn.model_selection import GridSearchCV
 
 
 ###################
-# Loading dataset #
+# Loading train/dev/test sets #
 ###################
 
-data_path = argv[1]
+print 'loading data'
 
-df = pd.read_csv(data_path)
+train_x = pd.read_table("full_data10000_indexes_180days.train_x.aggregated.tsv").values
+train_y = pd.read_table("full_data10000_indexes_180days.train_y.aggregated.tsv").values.flatten()
+#dev_x = pd.read_table("full_data10000_indexes_180days.dev_x.aggregated.tsv").values
+#dev_x = pd.read_table("full_data10000_indexes_180days.dev_y.aggregated.tsv").values
 
+test_x = pd.read_table("full_data10000_indexes_180days.test_x.aggregated.tsv").values
+test_y = pd.read_table("full_data10000_indexes_180days.test_y.aggregated.tsv").values.flatten()
 ##########################
 # Split train / test set #
 ##########################
 #  will expand to train / dev / set once we have more data
 
-frac_test = 0.2
+#frac_test = 0.2
 
-test_x = df.iloc[0:int(frac_test * df.shape[0]), 3:].values
-test_y = df.iloc[0:int(frac_test * df.shape[0]), 2].values
-
-train_x = df.iloc[int(frac_test * df.shape[0]):, 3:].values
-train_y = df.iloc[int(frac_test * df.shape[0]):, 2].values
+# test_x = df.iloc[0:int(frac_test * df.shape[0]), 3:].values
+# test_y = df.iloc[0:int(frac_test * df.shape[0]), 2].values
+#
+# train_x = df.iloc[int(frac_test * df.shape[0]):, 3:].values
+# train_y = df.iloc[int(frac_test * df.shape[0]):, 2].values
 
 n_obs, n_feature = test_x.shape
 
-####################### 
+#######################
 # Setting up pipeline #
 #######################
+
+print 'setting up pipeline'
 
 logistic = linear_model.LogisticRegression(class_weight = 'balanced')
 
@@ -69,14 +76,11 @@ test_x = scaler.transform(test_x)
 #######
 # PCA #
 #######
-# We currently don't have enough data to run logistic regression
-# with all features (# features > # obs)
-# So we'll use PCA to reduce dimensionality 
+# Use PCA to reduce dimensionality
+
+print 'fitting pca'
 
 pca.fit = pca.fit(train_x)
-
-
-
 
 #######################
 # Logistic regression #
@@ -88,6 +92,8 @@ n_components = [5, 20, 40, 64, 100, 300]
 Cs = np.logspace(-6, 3, 6)
 
 # Hyperparameter grid search with cross-validation
+print 'finding hyperparameters'
+
 estimator = GridSearchCV(pipe,
                          dict(pca__n_components=n_components,
                               logistic__C=Cs),
@@ -97,6 +103,7 @@ estimator.fit(train_x, train_y)
 
 
 # Plot PCA
+print 'plotting pca'
 label = 'n_components chosen: ' + str(estimator.best_estimator_.named_steps['pca'].n_components) + "\nL2 param: " + str(estimator.best_estimator_.named_steps['logistic'].C)
 plt.figure(1, figsize=(8, 6))
 plt.axes([.2, .2, .7, .7])
@@ -113,7 +120,7 @@ plt.savefig("logistic_reg_PCA_with_chosen_param.png")
 ######################
 # Prediction on test #
 ######################
-
+print 'predicting on test set'
 predict_y = estimator.best_estimator_.predict(test_x)
 accuracy_test = metrics.accuracy_score(test_y, predict_y)
 report_test = metrics.classification_report(test_y, predict_y)
@@ -152,5 +159,3 @@ with open("report_logistic_regression.txt", 'w') as f:
 
 	f.write("report:\n")
 	f.write(str(report_test))
-
-
