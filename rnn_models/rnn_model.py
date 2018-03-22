@@ -181,8 +181,8 @@ class RNNModel(object):
         elif self.config.cell == "lstm":
             cell = tf.contrib.rnn.LSTMCell(self.config.hidden_size)
         elif self.config.cell == "multi_gru":
-            rnn_layers = [tf.contrib.rnn.GRUCell(size) for size in [300, 150, self.config.hidden_size]]
-            cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
+		rnn_layers = [GRUCell(f, h) for f, h in [(self.config.feature_size, 500), (500, 50), (50, self.config.hidden_size)]]
+		cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
         elif self.config.cell == "multi_rnn":
             rnn_layers = [tf.contrib.rnn.BasicRNNCell(size) for size in [300, 150, self.config.hidden_size]]
             cell = tf.contrib.rnn.MultiRNNCell(rnn_layers)
@@ -354,10 +354,10 @@ class RNNModel(object):
 
             epoch_losses.append(batch_losses)
 
-            if epoch % 10 == 0:
-                logger.info("Evaluating on training data")
-                entity_scores = self.evaluate(session, train_x, train_y)
-                logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
+            #if epoch % 10 == 0:
+            #    logger.info("Evaluating on training data")
+            #    entity_scores = self.evaluate(session, train_x, train_y)
+            #    logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
             logger.info("Evaluating on development data")
             entity_scores = self.evaluate(session, dev_x, dev_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)

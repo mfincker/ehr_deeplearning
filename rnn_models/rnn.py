@@ -14,7 +14,7 @@ import time
 import os
 from datetime import datetime
 import cPickle as pickle
-from random import random, seed
+from random import random, seed, randint
 
 import tensorflow as tf
 import numpy as np
@@ -44,7 +44,7 @@ class Config:
         self.embed_size = args.embed_size
         self.hidden_size = args.hidden_size
         self.batch_size = 16
-        self.n_epochs = 100
+        self.n_epochs = 50
         self.max_grad_norm = 10.
         self.lr = args.learning_rate
         self.clip_gradients = False
@@ -62,7 +62,7 @@ class Config:
             # Where to save things.
             self.output_path = args.model_path
         else:
-            self.output_path = "results/{}/{:%Y%m%d_%H%M%S}/".format(self.cell, datetime.now())
+            self.output_path = "results/{}/{:%Y%m%d_%H%M%S}_{}/".format(self.cell, datetime.now(), str(randint(0, 9)))
 
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
@@ -201,7 +201,7 @@ def do_train(args):
     # Downsample the dataset - too long to train on full data
     keep_train = 5000
     keep_dev = 500
-    logger.info("keeping only %d train examples and %d dev examples" % (2000, 200))
+    logger.info("keeping only %d train examples and %d dev examples" % (keep_train, keep_dev))
     train_x = train_x[:keep_train]
     train_y = train_y[:keep_train]
     dev_x = dev_x[:keep_dev]
@@ -277,7 +277,7 @@ def do_evaluate(args):
 
             entity_scores = model.evaluate(session, test_x, test_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
-            
+ 
             
 
 
