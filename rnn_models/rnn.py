@@ -275,8 +275,15 @@ def do_evaluate(args):
             session.run(init)
             saver.restore(session, model.config.model_output)
 
-            entity_scores = model.evaluate(session, test_x, test_y)
+            entity_scores, logits, preds, labels = model.evaluate(session, test_x, test_y)
+
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
+            with open(config.output_path.strip('/') + "/test_preds.txt", "w") as f:
+                f.write("\n".join([str(e) for e in preds]))
+            with open(config.output_path.strip('/') + "/test_logits.txt", "w") as f:
+                f.write("\n".join([str(e) for e in logits]))
+            with open(config.output_path.strip('/') + "/test_labels.txt", "w") as f:
+                f.write("\n".join([str(e) for e in labels]))
  
             
 

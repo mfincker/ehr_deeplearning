@@ -265,8 +265,7 @@ class RNNModel(object):
 
     def predict_on_batch(self, sess, inputs_batch, index_batch):
         feed = self.create_feed_dict(inputs_batch=inputs_batch, index_batch=index_batch)
-        predictions = sess.run(tf.cast(tf.reshape(self.pred, [-1]) > 0, tf.int32 ), feed_dict=feed)
-        # predictions = sess.run(self.pred, feed_dict=feed)
+        predictions = sess.run(self.pred, feed_dict=feed)
 
         return predictions
 
@@ -289,14 +288,14 @@ class RNNModel(object):
         """
 
         correct_preds, total_correct, total_preds = 0., 0., 0.
-        labels, preds = self.output(sess, x, y)
+        logits, preds, labels = self.output(sess, x, y)
 
         accuracy = sum([l == p for l, p in zip(labels, preds)]) / len(labels)
         precision = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(preds)
         recall = sum([l == p for l, p in zip(labels, preds) if l == 1]) / sum(labels)
         f1 = 2 / ((1/precision) + (1/recall))
 
-        return (accuracy, precision, recall, f1)
+        return (accuracy, precision, recall, f1), logits, preds, labels
 
 
     def output(self, sess, x, y):
@@ -307,7 +306,7 @@ class RNNModel(object):
         inputs = self.preprocess_sequence_data(x)
         inputs = [(t[0], t[1], l) for t, l in zip(inputs, y)]
 
-        preds = []
+        logits = []
         prog = Progbar(target=1 + int(len(inputs) / self.config.batch_size))
         labels = []
         for i, batch in enumerate(minibatches(inputs, self.config.batch_size, shuffle=False)):
@@ -316,12 +315,15 @@ class RNNModel(object):
             batch_ = batch[:-1]
             labels_ = batch[-1]
 
-            preds_ = self.predict_on_batch(sess, *batch_)
+            logits_ = self.predict_on_batch(sess, *batch_)
 
-            preds.extend(list(preds_))
+            logits.extend(list(logits_))
             labels.extend(list(labels_))
             prog.update(i + 1, [])
-        return labels, preds
+
+        logits =  [l[0] for l in logits]# unpack list
+        preds = [0 if l < 0 else 1 for l in logits]
+        return logits, preds, labels
 
     def fit(self, session, saver, train_x, train_y, dev_x, dev_y):
         best_score = 0.
@@ -356,10 +358,10 @@ class RNNModel(object):
 
             #if epoch % 10 == 0:
             #    logger.info("Evaluating on training data")
-            #    entity_scores = self.evaluate(session, train_x, train_y)
+            #    entity_scores, _, _ = self.evaluate(session, train_x, train_y)
             #    logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
             logger.info("Evaluating on development data")
-            entity_scores = self.evaluate(session, dev_x, dev_y)
+            entity_scores, _, _ = self.evaluate(session, dev_x, dev_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
 
             score = entity_scores[-1]
