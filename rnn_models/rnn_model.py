@@ -358,10 +358,10 @@ class RNNModel(object):
 
             #if epoch % 10 == 0:
             #    logger.info("Evaluating on training data")
-            #    entity_scores, _, _ = self.evaluate(session, train_x, train_y)
+            #    entity_scores, _, _, _ = self.evaluate(session, train_x, train_y)
             #    logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
             logger.info("Evaluating on development data")
-            entity_scores, _, _ = self.evaluate(session, dev_x, dev_y)
+            entity_scores, _, _, _ = self.evaluate(session, dev_x, dev_y)
             logger.info("Accuracy/Precision/Recall/F1: %.2f/%.2f/%.2f/%.2f", *entity_scores)
 
             score = entity_scores[-1]
