@@ -1,8 +1,1 @@
-# ehr_deeplearning
-cs 230 project
-
-## Dataset
-
-Subset of stride7.
-
-Inclusion queries to stride7 to define the dataset.
+# ER readmission within 48h of discharge, as inferred from EHR records
